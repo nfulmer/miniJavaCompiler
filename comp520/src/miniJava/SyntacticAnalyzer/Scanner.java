@@ -20,7 +20,7 @@ public class Scanner {
 	public Scanner(ErrorReporter reporter, String fileName, boolean debug) {
 		this.reporter = reporter;
 		this.debug = debug;
-		this.sposn = new SourcePosition();
+		this.sposn = new SourcePosition(1);
 		if (debug) {
 			System.out.println(fileName);
 			stringReader = new StringReader(fileName);
@@ -34,12 +34,15 @@ public class Scanner {
 	}
 	
 	public Token scan() {
-		while (currentChar == ' ' || currentChar == '\r' || currentChar == '\n' || currentChar == '\t')
+		while (currentChar == ' ' || currentChar == '\r' || currentChar == '\n' || currentChar == '\t') {
 		// whitespace is limited to spaces, tabs (\t), newlines (\n) and carriage returns (\r)
+			if (currentChar == '\n') {
+				sposn.advancePosition();
+			}
 			readChar();
+		}
 		currentSpelling = new StringBuilder();
 		Token sc = scanToken();
-		sposn.advancePosition();
 		return sc;
 	}
 
@@ -165,12 +168,16 @@ arithmetic operators: + - * / */
 			readChar();
 		}
 		if (currentChar == '\n') {
+			sposn.advancePosition();
 			readChar();
 		}
 	}
 	
 	void readMultiComment() {
 		while (currentChar != '*' && !eot) {
+			if (currentChar == '\n') {
+				sposn.advancePosition();
+			}
 			readChar();
 		}
 		if (currentChar == '*') {
@@ -195,6 +202,8 @@ arithmetic operators: + - * / */
 				readChar();
 			}
 			switch(currentSpelling.toString()) {
+			case "null":
+				return new Token(TokenKind.NULL, "null", sposn);
 			case "true":
 				return new Token(TokenKind.TRUE, "true", sposn) ;
 			case "false":

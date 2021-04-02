@@ -1,9 +1,12 @@
 package miniJava;
 
 import java.io.FileInputStream;
+
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 
+import miniJava.AbstractSyntaxTrees.AST;
+import miniJava.ContextualAnalysis.*;
 import miniJava.SyntacticAnalyzer.*;
 
 public class Compiler {
@@ -52,7 +55,7 @@ public class Compiler {
 		Scanner scan = new Scanner(er, sourceFile, debug);
 		Parser ps = new Parser(scan, er, debug);
 		
-		ps.parse();
+		AST tree = ps.parse();
 		
 		if (er.numErrors() > 0) {
 			if (debug) {
@@ -60,11 +63,35 @@ public class Compiler {
 			}
 			return 4;
 		} else {
-			if (debug) {
-				System.out.println("VALID PROGRAM");
+
+			Identification id = new Identification(tree, er);
+			// PA3 specifications: it's reasonable to stop contextual analysis upon failure in identification 
+			// because further checking might be meaningless
+			if (er.numErrors() > 0) {
+				if (debug) {
+					System.out.println("NOT VALID PROGRAM");
+				}
+				return 4;
+			} else {
+				TypeChecking tc = new TypeChecking(tree, er);
+				
+				if (er.numErrors() > 0) {
+					if (debug) {
+						System.out.println("NOT VALID PROGRAM");
+					}
+					return 4;
+				} else {
+					if (debug) {
+						System.out.println("VALID PROGRAM");
+					}
+					return 0;
+				}
 			}
-			return 0;
+			
+			
 		}
+		
+		
 	}
 }
 

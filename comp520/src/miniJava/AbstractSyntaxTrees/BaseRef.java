@@ -10,7 +10,9 @@ import miniJava.SyntacticAnalyzer.SourcePosition;
 public abstract class BaseRef extends Reference {
 
 	public BaseRef(SourcePosition posn){
-		super(posn);
+		// TODO
+		// changed to add second decl argument
+		super(posn, null);
 	}
 
 }

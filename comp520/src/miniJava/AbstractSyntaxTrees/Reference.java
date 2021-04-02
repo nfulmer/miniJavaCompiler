@@ -9,8 +9,14 @@ import miniJava.SyntacticAnalyzer.SourcePosition;
 
 public abstract class Reference extends AST
 {
-	public Reference(SourcePosition posn){
+	public Declaration decl;
+	public Reference(SourcePosition posn, Declaration decl){
 		super(posn);
+		if (decl == null) {
+	    	// TODO: throw error
+	    } else {
+	    	this.decl = decl;
+	    }
 	}
 
 }

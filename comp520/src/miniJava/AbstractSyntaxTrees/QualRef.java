@@ -10,7 +10,9 @@ import miniJava.SyntacticAnalyzer.SourcePosition;
 public class QualRef extends Reference {
 	
 	public QualRef(Reference ref, Identifier id, SourcePosition posn){
-		super(posn);
+		// TODO
+		// changed to add second decl argument
+		super(posn, null);
 		this.ref = ref;
 		this.id  = id;
 	}

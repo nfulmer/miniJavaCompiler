@@ -6,11 +6,37 @@
 package miniJava.AbstractSyntaxTrees;
 
 import  miniJava.SyntacticAnalyzer.SourcePosition;
+import miniJava.SyntacticAnalyzer.Token;
+import miniJava.SyntacticAnalyzer.TokenKind;
 
 public class ClassDecl extends Declaration {
 
+	// added for String
+	public ClassDecl(String cn, TypeDenoter td, FieldDeclList fdl, MethodDeclList mdl, SourcePosition posn) {
+		  // class declaration has type class???
+		  // changed from:
+		  // super(cn, null, posn);
+		  super(cn, td, posn);
+
+		  /*
+		  if (cn.equals("String")) {
+			  super(cn, new BaseType(TypeKind.UNSUPPORTED, posn), posn);
+		  } */
+		  fieldDeclList = fdl;
+		  methodDeclList = mdl;
+	  }
+
+	
   public ClassDecl(String cn, FieldDeclList fdl, MethodDeclList mdl, SourcePosition posn) {
-	  super(cn, null, posn);
+	  // class declaration has type class???
+	  // changed from:
+	  //super(cn, null, posn);
+	  super(cn, new ClassType(new Identifier(new Token(TokenKind.ID, cn, posn)), posn), posn);
+
+	  /*
+	  if (cn.equals("String")) {
+		  super(cn, new BaseType(TypeKind.UNSUPPORTED, posn), posn);
+	  } */
 	  fieldDeclList = fdl;
 	  methodDeclList = mdl;
   }
