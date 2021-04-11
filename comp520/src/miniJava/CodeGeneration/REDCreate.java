@@ -47,10 +47,10 @@ public class REDCreate implements Visitor<String, Object> {
 								REDError("Error! Public static void main method needs String[] input argument type!");
 							}
 						}
-						/* TODO: confirm it doesn't have to be called args
+						/* TODO: confirm it doesn't have to be called args */
 						if (!pd.name.equals("args")) {
 							REDError("Error! Public static void main method needs 'args' input argument!");
-						} */
+						} 
 					}
 					if (uniquePSVM == true) {
 						REDError("Error! Cannot have mutiple public static void main methods!");

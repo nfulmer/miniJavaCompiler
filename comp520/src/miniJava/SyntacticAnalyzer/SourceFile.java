@@ -14,14 +14,14 @@ public class SourceFile {
 		String t;
 		System.out.println("TESTING - DEBUG MODE");
 		
-		return fail352();
+		return lengthCheck();
 	}
 	
 	public String lengthCheck() {
 		return "class baby{\n"
 				+ "static int[] baby2;"
 				+ "public static void main(String[] banana){\n"
-				+ "int tootle = this.baby2.length;\n"
+				+ "int tootle = baby2.length;\n"
 				+ "int bnn = banana.length;"
 				+ "}\n"
 				+ "}\n";

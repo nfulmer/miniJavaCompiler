@@ -83,7 +83,7 @@ public class Compiler {
 					return 4;
 				} else {
 					
-					//REDCreate cGen = new REDCreate(tree, er);
+					REDCreate cGen = new REDCreate(tree, er);
 					
 					if (er.numErrors() > 0) {
 						if (debug) {

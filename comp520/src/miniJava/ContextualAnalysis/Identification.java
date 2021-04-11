@@ -717,9 +717,7 @@ public class Identification implements Visitor<String, Object> {
 				ClassDecl cd = null;
 	
 				MemberDecl md = (MemberDecl) curMemDecs.get(memArray[1]);
-				if (md instanceof MethodDecl) {
-					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method '" + md.name + "' cannot be used as a qualified reference!");
-				}
+
 				for (int i = 2; i < memArray.length; i++) {
 					if (md instanceof MethodDecl) {
 						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method '" + md.name + "' cannot be used as a qualified reference!");
