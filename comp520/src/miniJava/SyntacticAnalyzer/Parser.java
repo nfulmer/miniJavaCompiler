@@ -465,6 +465,7 @@ public class Parser {
 	 * Z ::= Reference
  | Reference [ Expression ]
 | Reference ( ArgumentList? )
+| Reference.length <-- added for PA4
 | unop Expression | MINUS Expression
 | Expression binop Expression
 | ( Expression )
@@ -561,6 +562,7 @@ public class Parser {
 	
 	/*Z ::= Reference
 			 | Reference [ Expression ]
+			 | Reference.length <-- added for PA4
 					 | Reference ( ArgumentList? )
 					 | unop Expression | MINUS Expression
 					 | ( Expression )
@@ -664,6 +666,12 @@ public class Parser {
 				cp = token.posn;
 				accept(new Token(TokenKind.RPAREN, ")", token.posn));
 				return new CallExpr(r, el, cp);
+			} else if (token.kind == TokenKind.LENGTH) {
+				// the reference parse will accept the reference bits up until length
+				// added for PA4
+				cp = token.posn;
+				accept(new Token(TokenKind.LENGTH, "length", token.posn));
+				return new ArrayLengthExpr(r, cp);
 			} else {
 				return new RefExpr(r, r.posn);
 			}
@@ -700,6 +708,10 @@ public class Parser {
 	Reference parseReferencePrime(Reference r) throws SyntaxError {
 		if (token.kind == TokenKind.PERIOD) {
 			accept(new Token(TokenKind.PERIOD, ".", token.posn));
+			// added for pa4
+			if (token.kind == TokenKind.LENGTH) {
+				return r;
+			}
 			Identifier id = new Identifier(token);
 			SourcePosition cp = token.posn;
 			accept(new Token(TokenKind.ID, "?", token.posn));

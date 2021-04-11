@@ -6,6 +6,7 @@ import java.io.FileNotFoundException;
 import java.io.InputStream;
 
 import miniJava.AbstractSyntaxTrees.AST;
+import miniJava.CodeGeneration.REDCreate;
 import miniJava.ContextualAnalysis.*;
 import miniJava.SyntacticAnalyzer.*;
 
@@ -81,10 +82,20 @@ public class Compiler {
 					}
 					return 4;
 				} else {
-					if (debug) {
-						System.out.println("VALID PROGRAM");
+					
+					//REDCreate cGen = new REDCreate(tree, er);
+					
+					if (er.numErrors() > 0) {
+						if (debug) {
+							System.out.println("NOT VALID PROGRAM");
+						}
+						return 4;
+					} else {
+						if (debug) {
+							System.out.println("VALID PROGRAM");
+						}
+						return 0;
 					}
-					return 0;
 				}
 			}
 			

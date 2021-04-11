@@ -57,6 +57,9 @@ public interface Visitor<ArgType,ResultType> {
     public ResultType visitIntLiteral(IntLiteral num, ArgType arg);
     public ResultType visitBooleanLiteral(BooleanLiteral bool, ArgType arg);
 
-    // added
+    // added pa3
 	public ResultType visitNullLiteral(NullLiteral nulll, ArgType arg);
+	
+	// added pa4
+	public ResultType visitArrayLengthExpr(ArrayLengthExpr al, ArgType arg);
 }

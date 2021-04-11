@@ -6,6 +6,7 @@ import miniJava.AbstractSyntaxTrees.Package;
 import miniJava.ContextualAnalysis.Identification.SyntaxError;
 import miniJava.SyntacticAnalyzer.SourcePosition;
 import miniJava.SyntacticAnalyzer.Token;
+import miniJava.SyntacticAnalyzer.TokenKind;
 
 public class TypeChecking implements Visitor<String, Object> {
 	
@@ -448,6 +449,8 @@ public class TypeChecking implements Visitor<String, Object> {
 			return visitNewObjectExpr((NewObjectExpr) e, arg);
 		} else if (e instanceof NewArrayExpr) {
 			return visitNewArrayExpr((NewArrayExpr) e, arg);
+		} else if (e instanceof ArrayLengthExpr) {
+			return visitArrayLengthExpr((ArrayLengthExpr) e, arg);
 		} else {
 			typeError("*** line " + String.valueOf(e.posn.getPosition()) + ": Expression not recognized type!");
 		}
@@ -636,8 +639,17 @@ public class TypeChecking implements Visitor<String, Object> {
 	public Object visitNullLiteral(NullLiteral nulll, String arg) {
 		return new BaseType(TypeKind.NULL, nulll.posn);
 	}
-	
-	
 
+	@Override
+	public Object visitArrayLengthExpr(ArrayLengthExpr al, String arg) {
+		// how to specify what the actual value is? do we need to?
+		
+		if (!al.r.decl.type.typeKind.equals(TypeKind.ARRAY)) {
+			typeError("*** line " + String.valueOf(al.posn.getPosition()) + ": Type Error: only Array types have a length field!");
+			return new BaseType(TypeKind.INT, al.posn);
+		} else {
+			return new BaseType(TypeKind.INT, al.posn);		
+		}
+	}
 
 }

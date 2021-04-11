@@ -18,6 +18,7 @@ public class Identification implements Visitor<String, Object> {
 	private IdentificationTable otherMemDecs;
 	//scoped identification table
 	private Stack<IdentificationTable> sit; 
+	private MethodDecl curMeth;
 	
 	private boolean staticMethod;
 	
@@ -41,7 +42,7 @@ public class Identification implements Visitor<String, Object> {
 	private void identificationError (String e) throws SyntaxError{
 		reporter.reportError(e);
 		//System.out.println(classDecs.toString());
-		//System.out.println(curMemDecs.toString());
+		System.out.println(curMemDecs.toString());
 		//System.out.println(otherMemDecs.toString());
 		//System.out.println(sit.peek().toString());
 		throw new SyntaxError();
@@ -211,6 +212,8 @@ public class Identification implements Visitor<String, Object> {
 	public Object visitMethodDecl(MethodDecl md, String arg) throws SyntaxError {
 		// Visibility Access ( Type | void ) id ( ParameterList? ) {Statement*}
 		try {
+			curMeth = md;
+			
 			if (md.isStatic) {
 				staticMethod = true;
 			}
@@ -225,10 +228,29 @@ public class Identification implements Visitor<String, Object> {
 				
 			IdentificationTable lev4 = new IdentificationTable();
 			sit.add(lev4);
-				
+			
+			if (!curMeth.type.typeKind.equals(TypeKind.VOID) && md.statementList.size() < 1) {
+				identificationError("*** line " + String.valueOf(md.posn.getPosition()) + ": Error! Non-void method must have return statement!");
+			}
+			
+			for (int i = 0; i < md.statementList.size(); i++) {
+				if (!curMeth.type.typeKind.equals(TypeKind.VOID)) {
+					if (i == md.statementList.size() - 1) {
+						// last statement in non-void method has to be return
+						visitStatement(md.statementList.get(i), arg + " !last");
+					} else {
+						visitStatement(md.statementList.get(i), arg);
+					}
+				} else {
+					visitStatement(md.statementList.get(i), arg);
+				}
+			}
+			
+			/*
 			for (Statement s: md.statementList) {
 				visitStatement(s, arg);
 			}
+			*/
 				
 			sit.pop(); //removes lev4 scope
 			sit.pop(); //removes paramScope
@@ -294,15 +316,11 @@ public class Identification implements Visitor<String, Object> {
 
 	@Override
 	public Object visitBaseType(BaseType type, String arg) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
-	public Object visitClassType(ClassType type, String arg) {
-		// TODO Auto-generated method stub
-		
-		// COULDN'T I USE VISITCLASSTYPE???
+	public Object visitClassType(ClassType type, String arg) {		
 		try {
 			type.className.decl = (ClassDecl) classDecs.get(type.className.spelling);
 			if (type.className.decl == null) {
@@ -338,11 +356,14 @@ public class Identification implements Visitor<String, Object> {
 				arg = args[0];
 			}
 			
+			if (args.length > 1 && args[1].equals("!last") && !(s instanceof ReturnStmt)) {
+				identificationError("*** line " + String.valueOf(s.posn.getPosition()) + ": Error! Last statement in non-void method must be return statement!");
+			}
+			
 			if (s instanceof BlockStmt) {
 				visitBlockStmt((BlockStmt) s, arg);
 			} else if (s instanceof VarDeclStmt) {
-				// TODO: does it count if it's a block statement with one variable declaration statement?
-				if (args.length > 1 && args[1].equals("conditionbranch")) {
+				if (args.length > 1 && args[1].equals("!conditionbranch")) {
 					identificationError("*** line " + String.valueOf(s.posn.getPosition()) + ": Identification Error: statement in a condition branch cannot be only variable declaration!");
 				}
 				visitVardeclStmt((VarDeclStmt) s, arg);
@@ -389,10 +410,8 @@ public class Identification implements Visitor<String, Object> {
 	@Override
 	public Object visitVardeclStmt(VarDeclStmt stmt, String arg) throws SyntaxError {
 		// Type id = Expression ;
-		
-		// TODO: expression cannot reference the variable in declaration
 		try {
-			visitExpression(stmt.initExp, arg);
+			visitExpression(stmt.initExp, arg + " " + stmt.varDecl.name);
 			// can't use declaration in expression -> this way there will be an error
 			// bc the variable will not have been declared
 			visitVarDecl(stmt.varDecl, arg);
@@ -420,7 +439,6 @@ public class Identification implements Visitor<String, Object> {
 	@Override
 	public Object visitIxAssignStmt(IxAssignStmt stmt, String arg) throws SyntaxError {
 		// Reference [ Expression ] = Expression ;
-		// TODO: verify that the array has been initialized
 		try {
 			visitReference(stmt.ref, arg);
 			visitExpression(stmt.ix, arg);
@@ -437,7 +455,7 @@ public class Identification implements Visitor<String, Object> {
 		// Reference ( ArgumentList? ) ;
 		// ArgumentList ::= Expression ( , Expression )*
 		try {
-			stmt.methodRef.decl = (Declaration) visitReference(stmt.methodRef, arg);
+			stmt.methodRef.decl = (Declaration) visitReference(stmt.methodRef, arg + " !callExpr");
 			if (stmt.argList.size() > 0) {
 				for (Expression e: stmt.argList) {
 					visitExpression(e, arg);
@@ -469,11 +487,9 @@ public class Identification implements Visitor<String, Object> {
 		try {
 			visitExpression(stmt.cond, arg);
 			
-			// TODO: VarDeclStmt CANNOT be the sole statement in condition branch
-			
-			visitStatement(stmt.thenStmt, arg + " conditionbranch");
+			visitStatement(stmt.thenStmt, arg + " !conditionbranch");
 			if (stmt.elseStmt != null) {
-				visitStatement(stmt.elseStmt, arg + " conditionbranch");
+				visitStatement(stmt.elseStmt, arg + " !conditionbranch");
 			}
 			
 			return null;
@@ -487,9 +503,7 @@ public class Identification implements Visitor<String, Object> {
 		// while ( Expression ) Statement
 		try {
 			visitExpression(stmt.cond, arg);
-			visitStatement(stmt.body, arg + " conditionbranch");
-			// TODO: VarDeclStmt CANNOT be the sole statement in condition branch
-	
+			visitStatement(stmt.body, arg + " !conditionbranch");	
 	
 			return null;
 		} catch (SyntaxError e) {
@@ -515,6 +529,8 @@ public class Identification implements Visitor<String, Object> {
 				visitNewObjectExpr((NewObjectExpr) e, arg);
 			} else if (e instanceof NewArrayExpr) {
 				visitNewArrayExpr((NewArrayExpr) e, arg);
+			} else if (e instanceof ArrayLengthExpr) {
+				visitArrayLengthExpr((ArrayLengthExpr) e, arg);
 			} else {
 				identificationError("*** line " + String.valueOf(e.posn.getPosition()) + ": Expression not recognized type!");
 			}
@@ -553,7 +569,9 @@ public class Identification implements Visitor<String, Object> {
 	@Override
 	public Object visitRefExpr(RefExpr expr, String arg) throws SyntaxError {
 		// Reference
+		String[] args = arg.split("\\s+");
 		try {
+
 			visitReference(expr.ref, arg);
 			
 			return null;
@@ -579,7 +597,7 @@ public class Identification implements Visitor<String, Object> {
 	public Object visitCallExpr(CallExpr expr, String arg) throws SyntaxError{
 		// Reference ( ArgumentList? )
 		try {
-			visitReference(expr.functionRef, arg);
+			visitReference(expr.functionRef, arg + " !callExpr");
 			if (expr.argList.size() > 0) {
 				for (Expression e: expr.argList) {
 					visitExpression(e, arg);
@@ -656,6 +674,8 @@ public class Identification implements Visitor<String, Object> {
 		}
 	}
 	
+	// added for pa4
+	
 	Object visitReference(Reference r, String arg) throws SyntaxError {
 		try {
 			if (r instanceof ThisRef) {
@@ -676,26 +696,34 @@ public class Identification implements Visitor<String, Object> {
 	@Override
 	public Object visitThisRef(ThisRef ref, String arg) {
 		try {
+			String[] args = arg.split("\\s+");
+
+			if (staticMethod) {
+				identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: cannot reference 'this' in static context!");
+			}
+			
 			if (arg.startsWith(".")) {			
 				// qualified reference
 				// https://stackoverflow.com/questions/7899525/how-to-split-a-string-by-space
 				String members = arg.split("\\s+")[0];
 				String[] memArray = members.split("\\.");
 				String thisClass = arg.split("\\s+")[1];
-				//ref.decl = getClassDecl(thisClass);
+				
 				ref.decl = classDecs.get(thisClass);
-				if (ref.decl instanceof MemberDecl && staticMethod && !((MemberDecl) ref.decl).isStatic) {
-					// cannot directly access a non-static member of class c if in a static method in class c
-					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ":  cannot access non-static member '" + ref.decl.name + "' in a static method!");
-					
-				}
+
 				if (!curMemDecs.containsKey(memArray[1])) {
 					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Member '" + memArray[1] + "' not declared in '" + currentClass + "'!");
 				}
 				ClassDecl cd = null;
 	
 				MemberDecl md = (MemberDecl) curMemDecs.get(memArray[1]);
+				if (md instanceof MethodDecl) {
+					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method '" + md.name + "' cannot be used as a qualified reference!");
+				}
 				for (int i = 2; i < memArray.length; i++) {
+					if (md instanceof MethodDecl) {
+						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method '" + md.name + "' cannot be used as a qualified reference!");
+					}
 					switch (md.type.typeKind) {
 					case CLASS:
 						cd = (ClassDecl) visitClassType((ClassType)(md.type), arg);
@@ -704,10 +732,20 @@ public class Identification implements Visitor<String, Object> {
 						// ERROR --> there are arguments left but the kind is bool, int, etc that can't have members
 						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Base type " + md.type.typeKind.toString() + " cannot have additional qualifiers!");
 					}
-					if (!otherMemDecs.containsKey(cd.name + "." + memArray[i])) {
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[i] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
+					
+					if (otherMemDecs.containsKey(cd.name + "." + memArray[i])) {
+						md = (MemberDecl) otherMemDecs.get(cd.name + "." + memArray[i]);
+					} else {
+						if (!curMemDecs.containsKey(memArray[i])) {
+							identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[i] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
+						} else {
+							if (!cd.name.equals(currentClass)) {
+								identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[i] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
+							} else {
+								md = (MemberDecl) curMemDecs.get(memArray[i]);
+							}
+						}
 					}
-					md = (MemberDecl) otherMemDecs.get(cd.name + "." + memArray[i]);
 				}
 				
 				switch (md.type.typeKind) {
@@ -718,11 +756,25 @@ public class Identification implements Visitor<String, Object> {
 					visitArrayType((ArrayType)(md.type), arg);
 					break;
 				default:
-					// TODO issue ERROR --> there are arguments left but the kind is bool, int, etc that can't have members
+				}
+				
+				if (md instanceof MethodDecl) {
+					if (md instanceof MethodDecl) {
+						boolean valid = false;
+						for (String i : args) {
+							if (i.equals("!callExpr")) {
+								valid = true;
+							}
+						}
+						if (! valid) {
+							identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method needs to be used in call expression!");
+						}
+					}
 				}
 				
 				return md;
 			} else {
+				
 				ref.decl = classDecs.get(currentClass);
 				visitClassType((ClassType)(ref.decl.type), arg);
 				return ref.decl;
@@ -738,26 +790,36 @@ public class Identification implements Visitor<String, Object> {
 	public Object visitIdRef(IdRef ref, String arg) {
 		// id
 		try {
+			String[] args = arg.split("\\s+");
+			// varDecl stuff will be third argument
+			
 			if (arg.startsWith(".")) {
+				
+				if (args.length > 2 && ref.id.spelling.equals(args[2])){
+					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: cannot use variable name in declaration!");
+				} 
 				
 				String members = arg.split("\\s+")[0];
 				String[] memArray = members.split("\\.");
-				// case class
-				//ref.decl = getClassDecl(ref.id);
 				
-				// case member of current class
-				ref.decl = curMemDecs.get(ref.id.spelling);
+				// case scoped object
+				ref.decl = getDecl(ref.id.spelling);
+				if (ref.decl != null && ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
+					visitClassType((ClassType) ref.decl.type, arg);
+				}
+				
+				if (ref.decl == null) {
+					// case member of current class
+					ref.decl = curMemDecs.get(ref.id.spelling);
+				}
 				if (ref.decl == null) {
 					// case static class reference
 					ref.decl = classDecs.get(ref.id.spelling);
 				} 
-	
-				// case scoped object
-				if (ref.decl == null) {
-					ref.decl = getDecl(ref.id.spelling);
-					if (ref.decl != null && ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
-						visitClassType((ClassType) ref.decl.type, arg);
-					}
+				
+				if (ref.decl instanceof MethodDecl) {
+					// method can't have members at this point, which is guarenteed if it's a qualified reference (starts w '.')
+					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method needs to be used in call expression!");
 				}
 				
 				if (ref.decl == null) {
@@ -766,51 +828,66 @@ public class Identification implements Visitor<String, Object> {
 				
 				MemberDecl md = null;
 				if (ref.decl instanceof ClassDecl) {
-					//md = getMemberDecl((ClassDecl) ref.decl, memArray[1]);
-					md = (MemberDecl) otherMemDecs.get(ref.decl.name + "." + memArray[1]);
-					if (md == null) {
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Member '" + memArray[1] + "' does not exist in '" + ref.decl.name + "' or is not accessible from current scope!");
+
+					if (otherMemDecs.containsKey(ref.decl.name  + "." + memArray[1])) {
+						md = (MemberDecl) otherMemDecs.get(ref.decl.name + "." + memArray[1]);
+					} else {
+						if (!args[1].equals(currentClass) || !curMemDecs.containsKey(memArray[1])) {
+							identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[1] + "' not found for class type '" + ref.decl.name + "' or not accessible from current scope!");
+						} else {
+							md = (MemberDecl) curMemDecs.get(memArray[1]);
+						}
 					}
-					if (!md.isStatic) {
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Trying to statically access non-static member!");
-					} 
-					/*if (md.isPrivate && !currentClass.equals(ref.id.spelling)) {
-						// trying to access private member outside of class
-						identificationError("*** line " + Cannot access private member!");
-					}*/
+					
+					if (staticMethod && !md.isStatic) {
+						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ":  cannot access non-static member '" + md.name + "' in a static method!");
+					}
+
 				} else if (ref.decl instanceof MemberDecl) {
 					if (staticMethod && !((MemberDecl) ref.decl).isStatic) {
 						// cannot directly access a non-static member of class c if in a static method in class c
 						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ":  cannot access non-static member '" + ref.decl.name + "' in a static method!");
 						
 					}
+					if (! ((MemberDecl) ref.decl).type.typeKind.equals(TypeKind.CLASS)){
+						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Variable '" + ref.decl.name + "' is not class type!");
+						return ref.decl;
+					} 
 					ClassDecl cd = (ClassDecl) visitClassType((ClassType)((MemberDecl) ref.decl).type, arg);
-					md = (MemberDecl) otherMemDecs.get(cd.name + "." + memArray[1]);
-					if (md == null) {
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Member '" + memArray[1] + "' does not exist in '" + cd.name + "' or is not accessible from the current scope!");
-					}
 					
-					// TODO: check if needed
-					/*if (md1.isStatic) {
-						identificationError("*** line " + Trying to non-statically access static member");
-					}*/
-					/*if (md.isPrivate && !currentClass.equals(cd.name)) {
-						identificationError("*** line " + Cannot access private member!");
-					}*/
+					if (otherMemDecs.containsKey(cd.name + "." + memArray[1])) {
+						md = (MemberDecl) otherMemDecs.get(cd.name + "." + memArray[1]);
+					} else {
+						if (!args[1].equals(currentClass) || !curMemDecs.containsKey(memArray[1])) {
+							identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[1] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
+						} else {
+							md = (MemberDecl) curMemDecs.get(memArray[1]);
+						}
+					}
 				} else {
 					// scoped reference
 					if (!ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
 						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Cannot have qualified reference for variable of type " + ref.decl.type.typeKind + "!");
 					}
 					ClassDecl cd = (ClassDecl) visitClassType((ClassType)(ref.decl).type, arg);
-					md = (MemberDecl) otherMemDecs.get(cd.name + "." + memArray[1]);
-					if (md == null) {
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Member '" + memArray[1] + "' does not exist in '" + cd.name + "' or is not accessible from the current scope!");
+					
+					if (otherMemDecs.containsKey(cd.name + "." + memArray[1])) {
+						md = (MemberDecl) otherMemDecs.get(cd.name + "." + memArray[1]);
+					} else {
+						if (!args[1].equals(currentClass) || !curMemDecs.containsKey(memArray[1])) {
+							identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[1] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
+						} else {
+							md = (MemberDecl) curMemDecs.get(memArray[1]);
+						}
 					}
 				}
 				
+				
 				ClassDecl cd = null;
 				for (int i = 2; i < memArray.length; i++) {
+					if (md instanceof MethodDecl) {
+						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method '" + md.name + "' cannot be used as a qualified reference!");
+					}
 					switch (md.type.typeKind) {
 					case CLASS:
 						cd = (ClassDecl) visitClassType((ClassType)(md.type), arg);
@@ -819,10 +896,19 @@ public class Identification implements Visitor<String, Object> {
 						// ERROR --> there are arguments left but the kind is bool, int, etc that can't have members
 						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Base types cannot have additional qualifiers!");
 					}
-					if (!otherMemDecs.containsKey(cd.name + "." + memArray[i])) {
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[i] + "' not found (or not accessible from current scope) from class type '" + cd.name + "'!");
+					if (otherMemDecs.containsKey(cd.name + "." + memArray[i])) {
+						md = (MemberDecl) otherMemDecs.get(cd.name + "." + memArray[i]);
+					} else {
+						if (!curMemDecs.containsKey(memArray[i])) {
+							identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[i] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
+						} else {
+							if (!cd.name.equals(currentClass)) {
+								identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[i] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
+							} else {
+								md = (MemberDecl) curMemDecs.get(memArray[i]);
+							}
+						}
 					}
-					md = (MemberDecl) otherMemDecs.get(cd.name + "." + memArray[i]);
 				}
 				
 				switch (md.type.typeKind) {
@@ -833,13 +919,42 @@ public class Identification implements Visitor<String, Object> {
 					visitArrayType((ArrayType)(md.type), arg);
 					break;
 				default:
-					// TODO issue ERROR --> there are arguments left but the kind is bool, int, etc that can't have members
 				}
+				
+				if (md instanceof MethodDecl) {
+					boolean valid = false;
+					for (String i : args) {
+						if (i.equals("!callExpr")) {
+							valid = true;
+						}
+					}
+					if (! valid) {
+						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method needs to be used in call expression!");
+					}
+				}
+				
 				
 				return md;
 				
 			} else {
+				if (args.length > 1 && ref.id.spelling.equals(args[1])) {
+					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: cannot use variable name in declaration!");
+				}
+				
 				ref.decl = (Declaration) visitIdentifier(ref.id, arg);
+				
+				if (ref.decl instanceof MethodDecl) {
+					boolean valid = false;
+					for (String i : args) {
+						if (i.equals("!callExpr")) {
+							valid = true;
+						}
+					}
+					if (! valid) {
+						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method needs to be used in call expression!");
+					}
+				}
+				
 				return ref.decl;
 			}
 			
@@ -852,8 +967,6 @@ public class Identification implements Visitor<String, Object> {
 	@Override
 	public Object visitQRef(QualRef ref, String arg) {
 		// Reference.id
-		
-		//TODO: do we need to check if static?
 		try {
 			if (arg.startsWith(".")) {
 				ref.decl = (Declaration) visitReference(ref.ref, "." + ref.id.spelling + arg);
@@ -884,7 +997,6 @@ public class Identification implements Visitor<String, Object> {
 
 	@Override
 	public Object visitIdentifier(Identifier id, String arg) {
-		// TODO Auto-generated method stub
 		try {
 			id.decl = getDecl(id.spelling);
 			if (id.decl == null) {
@@ -911,25 +1023,27 @@ public class Identification implements Visitor<String, Object> {
 
 	@Override
 	public Object visitOperator(Operator op, String arg) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Object visitIntLiteral(IntLiteral num, String arg) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Object visitBooleanLiteral(BooleanLiteral bool, String arg) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Object visitNullLiteral(NullLiteral nulll, String arg) {
-		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Object visitArrayLengthExpr(ArrayLengthExpr al, String arg) {
+		visitReference(al.r, arg);
 		return null;
 	}
 

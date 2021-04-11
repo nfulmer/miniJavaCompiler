@@ -13,12 +13,252 @@ public class SourceFile {
 	public String test() {
 		String t;
 		System.out.println("TESTING - DEBUG MODE");
-		//t = "class Pancake { int pan ; }"; //--> valid
-		//t = "class Pancake { public static int pan ; }"; //--> valid
-		//t = "class Pancake { public static pan ; }"; // not valid
-		//t = "class Pancake { public static pan  }$"; // not valid
-		return pass169();
-		//firstPa3Test()
+		
+		return fail352();
+	}
+	
+	public String lengthCheck() {
+		return "class baby{\n"
+				+ "static int[] baby2;"
+				+ "public static void main(String[] banana){\n"
+				+ "int tootle = this.baby2.length;\n"
+				+ "int bnn = banana.length;"
+				+ "}\n"
+				+ "}\n";
+	}
+	
+	public String psvmCheck() {
+		return "class baby{\n"
+				+ "public static void main(String[] banana){}\n"
+				+ "public int baby(){\n"
+				+ "return 7;\n"
+				+ "}\n"
+				+ "}\n";
+	}
+	
+	
+	// ----------------------------------- PA 3 --------------------------------------------- //
+	
+	// >>> PA 3 Fixes <<< //
+	/*
+	 * - fixed: compiler failed processing fail328.java 
+	 * - fixed: fail336, fail342, fail348, fail340, fail351
+	 * - fixed: pass321, pass378, pass379, pass382, pass383, pass324
+	 * - didn't pass: pass372, pass373, pass374, pass376, pass377, pass380, pass381 
+	 */
+	
+	public String fail352() {
+		return "/*** line 9: cannot nonstatic field \"pubfield\" from a static context. \r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class TestClass {\r\n" + 
+				"        \r\n" + 
+				"    public static void StaticContext() {\r\n" + 
+				"\r\n" + 
+				"        int x = TestClass.pubfield;\r\n" + 
+				"    }\r\n" + 
+				"        \r\n" + 
+				"    public int pubfield;\r\n" + 
+				"}";
+	}
+	
+	public String pass372() {
+		return "class TestClass {\r\n" + 
+				"        \r\n" + 
+				"    public static void staticContext() {\r\n" + 
+				"\r\n" + 
+				"        TestClass t = null;\r\n" + 
+				"        int x = 0;\r\n" + 
+				"\r\n" + 
+				"        /*\r\n" + 
+				"         * VALID\r\n" + 
+				"         */\r\n" + 
+				"\r\n" + 
+				"        // QualifiedRef \r\n" + 
+				"        // x = t.pubfield;\r\n" + 
+				"        x = t.privfield;\r\n" + 
+				"    }\r\n" + 
+				"        \r\n" + 
+				"       \r\n" + 
+				"    public int pubfield;\r\n" + 
+				"    private int privfield;\r\n" + 
+				"    public static int pubstatfield;\r\n" + 
+				"    private static int privstatfield;\r\n" + 
+				"}";
+	}
+	
+	public String pass324() {
+		return "/**\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class Pass324 {         \r\n" + 
+				"    public static void main(String[] args) {\r\n" + 
+				"        Pass324 p = new Pass324();\r\n" + 
+				"        int x = p.p() + p.x;\r\n" + 
+				"    }\r\n" + 
+				"    \r\n" + 
+				"    public int x;\r\n" + 
+				"    \r\n" + 
+				"    public int p() {\r\n" + 
+				"        return 3;\r\n" + 
+				"    }\r\n" + 
+				"}";
+	}
+	
+	public String pass305() {
+		return "/**\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class Pass305 { 	\r\n" + 
+				"    public static void main(String[] args) {\r\n" + 
+				"        System.out.println(3);\r\n" + 
+				"    } \r\n" + 
+				"}\r\n" + 
+				"";
+	}
+	
+	public String fail355() {
+		return "/*** line 9: reference does not denote a variable \r\n" + 
+				" * COMP 520  \r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class TestClass {\r\n" + 
+				"        \r\n" + 
+				"    public void nonStaticContext() {\r\n" + 
+				"\r\n" + 
+				"        int x = OtherClass.opubstatTest.privfn;\r\n" + 
+				"    }\r\n" + 
+				"        \r\n" + 
+				"        \r\n" + 
+				"    private int privfn() { return 1; }\r\n" + 
+				"}\r\n" + 
+				"\r\n" + 
+				"class OtherClass {\r\n" + 
+				"        \r\n" + 
+				"    public static TestClass opubstatTest;\r\n" + 
+				"}";
+	}
+	
+	public String pass321() {
+		return "/**\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class Pass321 { 	\r\n" + 
+				"    public static void main(String[] args) {\r\n" + 
+				"        Pass321 p = new Pass321();\r\n" + 
+				"        p.next = p;\r\n" + 
+				"        p.next.next.x = 3;\r\n" + 
+				"    } \r\n" + 
+				"    \r\n" + 
+				"    public Pass321 next;\r\n" + 
+				"    private int x;\r\n" + 
+				"}";
+	}
+	
+	
+	public String fail351() {
+		return "/*** line 11: reference \"pubfn\" does not denote a field or a variable\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class TestClass {\r\n" + 
+				"        \r\n" + 
+				"    public static void staticContext() {\r\n" + 
+				"\r\n" + 
+				"        int x = 0;\r\n" + 
+				"\r\n" + 
+				"        x = pubfn;\r\n" + 
+				"    }\r\n" + 
+				"        \r\n" + 
+				"        \r\n" + 
+				"    public static int pubfn() { return 1; }\r\n" + 
+				"}";
+	}
+	
+	public String fail348() {
+		return "/*** line 11: cannot reference \"this\" within a static context\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class TestClass {\r\n" + 
+				"        \r\n" + 
+				"    public static void staticContext() {\r\n" + 
+				"        int t = this.statfield;\r\n" + 
+				"    }\r\n" + 
+				"\r\n" + 
+				"    public static int statfield; \r\n" + 
+				"}        \r\n" + 
+				"";
+	}
+	
+	public String fail342() {
+		return "/*** line 11: cannot reference \"this\" within a static context\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class TestClass {\r\n" + 
+				"        \r\n" + 
+				"    public static void staticContext() {\r\n" + 
+				"        TestClass t = this;\r\n" + 
+				"    }\r\n" + 
+				"}";
+	}
+	
+	public String fail336() {
+		return "/*** line 8: \"foo\" is not a valid qualifier for reference \"c\"\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class Fail328 { 	\r\n" + 
+				"    public static void main(String[] args) {\r\n" + 
+				"        F05 c = new F05();\r\n" + 
+				"        c = c.foo.next;\r\n" + 
+				"    }\r\n" + 
+				"}\r\n" + 
+				"\r\n" + 
+				"class F05 {\r\n" + 
+				"    public F05 next;\r\n" + 
+				"    public F05 foo() {return this;}\r\n" + 
+				"}";
+		
+	}
+	
+	public String fail340() {
+		// !!!!
+		return "/*** line 11: cannot reference \"x\" within the initializing expression of the declaration for \"x\"\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class fail305 { 	\r\n" + 
+				"\r\n" + 
+				"    int x;\r\n" + 
+				"    int y;\r\n" + 
+				"\r\n" + 
+				"    public void foo() {\r\n" + 
+				"	int x = y + x;\r\n" + 
+				"    }\r\n" + 
+				"}";
+	}
+	
+	public String fail328() {
+		return "/*** line 10: reference \"d\" of type \"D []\" does not have a public field \"x\"\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class Fail328 {\r\n" + 
+				"\r\n" + 
+				"    public D [] d;\r\n" + 
+				"\r\n" + 
+				"    public void f() {\r\n" + 
+				"	int y = d.x;\r\n" + 
+				"    }\r\n" + 
+				"}\r\n" + 
+				"\r\n" + 
+				"class D { public int x; }";
 	}
 	
 	public String bb() {

@@ -202,6 +202,9 @@ arithmetic operators: + - * / */
 				readChar();
 			}
 			switch(currentSpelling.toString()) {
+			// added array length for pa4
+			case "length":
+				return new Token(TokenKind.LENGTH, "length", sposn);
 			case "null":
 				return new Token(TokenKind.NULL, "null", sposn);
 			case "true":
