@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 
+import mJAM.ObjectFile;
 import miniJava.AbstractSyntaxTrees.AST;
 import miniJava.CodeGeneration.REDCreate;
 import miniJava.ContextualAnalysis.*;
@@ -83,7 +84,9 @@ public class Compiler {
 					return 4;
 				} else {
 					
-					REDCreate cGen = new REDCreate(tree, er);
+					//REDCreate cGen = new REDCreate(tree, er);
+					//System.out.println(sourceFile.substring(0, sourceFile.length() - 4)+ "mJAM");
+					//ObjectFile ob = new ObjectFile(sourceFile.substring(0, sourceFile.length() - 4) + "mJAM");
 					
 					if (er.numErrors() > 0) {
 						if (debug) {
@@ -93,6 +96,8 @@ public class Compiler {
 					} else {
 						if (debug) {
 							System.out.println("VALID PROGRAM");
+						} else {
+							//ob.write();
 						}
 						return 0;
 					}

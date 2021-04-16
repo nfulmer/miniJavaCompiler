@@ -14,7 +14,7 @@ public class SourceFile {
 		String t;
 		System.out.println("TESTING - DEBUG MODE");
 		
-		return lengthCheck();
+		return whatt();
 	}
 	
 	public String lengthCheck() {
@@ -46,6 +46,153 @@ public class SourceFile {
 	 * - fixed: pass321, pass378, pass379, pass382, pass383, pass324
 	 * - didn't pass: pass372, pass373, pass374, pass376, pass377, pass380, pass381 
 	 */
+	
+	public String whatt() {
+		return "/**************************************************************\r\n" + 
+				" * miniJava PA4 feature test\r\n" + 
+				" *\r\n" + 
+				" *   use this to check contextual analysis and code\r\n" + 
+				" *   generation for successively more adventurous\r\n" + 
+				" *   miniJava constructs.\r\n" + 
+				" *\r\n" + 
+				" *   uncomment System.out.println(x) statements once\r\n" + 
+				" *     you have sufficient functionality\r\n" + 
+				" *   \r\n" + 
+				" *   When interpreted using mJAM the compiled code \r\n" + 
+				" *   should print 1 ... 15 999\r\n" + 
+				" *\r\n" + 
+				" **************************************************************/\r\n" + 
+				"\r\n" + 
+				"/*************\r\n" + 
+				" *  mainclass\r\n" + 
+				" */\r\n" + 
+				"class PA4Test\r\n" + 
+				"{\r\n" + 
+				"    public static void main(String[] args)\r\n" + 
+				"    {        \r\n" + 
+				"        /* 1: simple literal */\r\n" + 
+				"        int x = 1;\r\n" + 
+				"        // System.out.println(x);  \r\n" + 
+				"        \r\n" + 
+				"        /* 2: simple expression */\r\n" + 
+				"        x = 2 * x + x - 1;\r\n" + 
+				"        // System.out.println(x);  \r\n" + 
+				"\r\n" + 
+				"        /* 3: System.out.println */\r\n" + 
+				"        System.out.println(3);\r\n" + 
+				"         \r\n" + 
+				"        /* 4: conditional statement */\r\n" + 
+				"        if (x != -1)\r\n" + 
+				"        	System.out.println(4);\r\n" + 
+				"        else\r\n" + 
+				"            System.out.println(-1);\r\n" + 
+				"        \r\n" + 
+				"        /* 5: repetitive statement */\r\n" + 
+				"        int i = 0;\r\n" + 
+				"        while (i < 5) {\r\n" + 
+				"            i = i + 1;\r\n" + 
+				"            x = i;\r\n" + 
+				"        }\r\n" + 
+				"        System.out.println(x);\r\n" + 
+				"        \r\n" + 
+				"        /* 6: object creation */\r\n" + 
+				"        A a = new A();\r\n" + 
+				"        if (a != null)\r\n" + 
+				"        	System.out.println(6);\r\n" + 
+				"        \r\n" + 
+				"        /* 7: field reference */\r\n" + 
+				"        x = 7 + a.n;\r\n" + 
+				"        System.out.println(x);\r\n" + 
+				"\r\n" + 
+				"        /* 8: qualified reference and update */\r\n" + 
+				"        a.b = new B();\r\n" + 
+				"        a.b.n = 8;\r\n" + 
+				"        System.out.println(a.b.n);\r\n" + 
+				"        \r\n" + 
+				"        /* 9: array creation and length */\r\n" + 
+				"        int [] aa = new int [4];\r\n" + 
+				"        x = aa.length;\r\n" + 
+				"        System.out.println(2*x + 1);\r\n" + 
+				"        \r\n" + 
+				"        /* 10: array reference and update */\r\n" + 
+				"        aa[0] = 0;\r\n" + 
+				"        i = 1;\r\n" + 
+				"        while (i < aa.length) {\r\n" + 
+				"            aa[i] = aa[i-1] + i;\r\n" + 
+				"            i = i + 1;\r\n" + 
+				"        }\r\n" + 
+				"        x = aa[3] + 4;\r\n" + 
+				"        System.out.println(x);\r\n" + 
+				"        \r\n" + 
+				"        /* 11: simple method invocation */\r\n" + 
+				"        a.start();\r\n" + 
+				"        \r\n" + 
+				"        /* end of test */\r\n" + 
+				"        System.out.println(999);\r\n" + 
+				"    }\r\n" + 
+				"}\r\n" + 
+				"\r\n" + 
+				"/**********************************************************************\r\n" + 
+				" *\r\n" + 
+				" *  class A\r\n" + 
+				" */\r\n" + 
+				"class A\r\n" + 
+				"{\r\n" + 
+				"    int n;\r\n" + 
+				"    B b;\r\n" + 
+				"    \r\n" + 
+				"    public void start(){\r\n" + 
+				"        int x = 11;\r\n" + 
+				"        System.out.println(x);\r\n" + 
+				"        \r\n" + 
+				"        /* 12: field ref */\r\n" + 
+				"        b.a = this;\r\n" + 
+				"        n = 12;\r\n" + 
+				"        x = b.a.n;\r\n" + 
+				"        System.out.println(x);\r\n" + 
+				"        \r\n" + 
+				"        /* 13: complex method invocation */\r\n" + 
+				"        n = 4;\r\n" + 
+				"        x = 2 + foo(3,4);\r\n" + 
+				"        System.out.println(x);\r\n" + 
+				"        \r\n" + 
+				"        /* 14: recursion */\r\n" + 
+				"        System.out.println(8 + b.fact(3));\r\n" + 
+				"        \r\n" + 
+				"        /* 15: object-values */\r\n" + 
+				"        this.n = 4;\r\n" + 
+				"        b.n = 5;\r\n" + 
+				"        System.out.println(2 + this.goo(this,this.b));\r\n" + 
+				"        \r\n" + 
+				"    }\r\n" + 
+				"    \r\n" + 
+				"    public int foo(int x, int y) {\r\n" + 
+				"        return (n + x + y);\r\n" + 
+				"    }\r\n" + 
+				"    \r\n" + 
+				"    public int goo(A a, B bb) {\r\n" + 
+				"        return (a.n + bb.n + this.n);\r\n" + 
+				"    }\r\n" + 
+				"}\r\n" + 
+				"\r\n" + 
+				"/**********************************************************************\r\n" + 
+				" *\r\n" + 
+				" *  class B\r\n" + 
+				" */\r\n" + 
+				"class B\r\n" + 
+				"{\r\n" + 
+				"    int n;\r\n" + 
+				"    A a;\r\n" + 
+				"    \r\n" + 
+				"    public int fact(int nn){\r\n" + 
+				"        int r = 1;\r\n" + 
+				"        if (nn > 1)\r\n" + 
+				"            r = nn * fact(nn -1);\r\n" + 
+				"        return r;\r\n" + 
+				"    }\r\n" + 
+				"}\r\n" + 
+				"";
+	}
 	
 	public String fail352() {
 		return "/*** line 9: cannot nonstatic field \"pubfield\" from a static context. \r\n" + 

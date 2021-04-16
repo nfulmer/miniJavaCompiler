@@ -41,9 +41,11 @@ public class MyTest4 {
 		System.out.println("Running tests from directory " + testDir);
         int failures = 0;
         for (File x : testDir.listFiles()) {
-        	if (x.getName().startsWith("pa")) {
+        	if (x.getName().endsWith("_tests") || x.getName().startsWith(".") 
+        			|| x.getName().endsWith(".mJAM") || x.getName().endsWith(".asm") ) {
         		continue;
         	}
+        	System.out.println(x.getName());
         	int returnCode = runTest(x); 
         	if (returnCode == 1) {
 				System.err.println("### miniJava Compiler fails while processing test " + x.getName());
@@ -73,11 +75,13 @@ public class MyTest4 {
 	        Scanner scan = new Scanner(stream);
 	        while (scan.hasNextLine()) {
 	            String line = scan.nextLine();
-	            if (line.startsWith("*** "))
+	            /*if (line.startsWith("*** "))
 	                System.out.println(line);
 	            if (line.startsWith("ERROR")) {
 	                System.out.println(line);
-	            }
+	            }*/
+                System.out.println(line);
+
 	        }
 	        scan.close();
 	    }
