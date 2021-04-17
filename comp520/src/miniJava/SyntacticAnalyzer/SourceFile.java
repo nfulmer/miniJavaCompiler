@@ -14,7 +14,89 @@ public class SourceFile {
 		String t;
 		System.out.println("TESTING - DEBUG MODE");
 		
-		return whatt();
+		return pass337();
+	}
+	
+	public String pass337() {
+		return "/**\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Instance values\r\n" + 
+				" */\r\n" + 
+				"class Pass337 {\r\n" + 
+				"    public static void main (String [] args) {\r\n" + 
+				"        \r\n" + 
+				"        FirstClass f = new FirstClass ();\r\n" + 
+				"        f = f.getAlternate(57);\r\n" + 
+				"        \r\n" + 
+				"    }\r\n" + 
+				"}\r\n" + 
+				"\r\n" + 
+				"class FirstClass\r\n" + 
+				"{\r\n" + 
+				"    public int n;\r\n" + 
+				"    \r\n" + 
+				"    public FirstClass getAlternate(int v) {\r\n" + 
+				"\r\n" + 
+				"        FirstClass fc = new FirstClass();\r\n" + 
+				"        fc.n = v;\r\n" + 
+				"        \r\n" + 
+				"        FirstClass rc = fc.getThis();\r\n" + 
+				"        return rc;\r\n" + 
+				"    }\r\n" + 
+				"\r\n" + 
+				"    public FirstClass getThis() {\r\n" + 
+				"        return this;\r\n" + 
+				"    }\r\n" + 
+				"}";
+	}
+	
+	public String pass332() {
+		return "/**\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Array indexing\r\n" + 
+				" */\r\n" + 
+				"class Pass332 {         \r\n" + 
+				"\r\n" + 
+				"    public D [] d; \r\n" + 
+				"\r\n" + 
+				"    public void foo() {\r\n" + 
+				"	D p  = this.d[3];\r\n" + 
+				"	int y = p.x;\r\n" + 
+				"    }\r\n" + 
+				"}\r\n" + 
+				"\r\n" + 
+				"class D { public int x; }";
+	}
+	
+	public String fail394() {
+		return "/*** line 7: cannot reference non-static symbol \"x\" in static context\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class fail318 { 	\r\n" + 
+				"    public static void main(String[] args) {\r\n" + 
+				"        int y = x + 3;\r\n" + 
+				"    }\r\n" + 
+				"    \r\n" + 
+				"    public int x;\r\n" + 
+				"}";
+	}
+	
+	public String fail335() {
+		return "/*** line 7: reference \"F02\" is not a variable\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class fail335 { 	\r\n" + 
+				"    public static void main(String[] args) {\r\n" + 
+				"        F02 c = F02;\r\n" + 
+				"    }\r\n" + 
+				"}\r\n" + 
+				"\r\n" + 
+				"class F02 {\r\n" + 
+				"    public int x;\r\n" + 
+				"}\r\n" + 
+				"";
 	}
 	
 	public String lengthCheck() {
@@ -36,6 +118,21 @@ public class SourceFile {
 				+ "}\n";
 	}
 	
+	
+	public String fail306() {
+		return "/*** line 10: identifier \"z\" has not been declared\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class fail306 { 	\r\n" + 
+				"\r\n" + 
+				"    int y;\r\n" + 
+				"\r\n" + 
+				"    public void foo() {\r\n" + 
+				"	int x = y + z;\r\n" + 
+				"    }\r\n" + 
+				"}";
+	}
 	
 	// ----------------------------------- PA 3 --------------------------------------------- //
 	

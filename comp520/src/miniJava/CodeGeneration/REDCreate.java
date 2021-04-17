@@ -364,7 +364,7 @@ public class REDCreate implements Visitor<String, Object> {
 		for (Expression ex : stmt.argList) {
 			visitExpression(ex, arg);
 		}
-		visitReference(stmt.methodRef, "");
+		visitReference(stmt.methodRef, " !method");
 		return null;
 	}
 
@@ -562,7 +562,7 @@ public class REDCreate implements Visitor<String, Object> {
 		if (in(arg, "!encode")) {
 			encode = true;
 		}
-		
+		//System.out.println(arg);
 		String[] argss = arg.split("\\s+");
 		arg = argss[0];
 		
@@ -578,6 +578,7 @@ public class REDCreate implements Visitor<String, Object> {
 				Machine.emit(Prim.putintnl);
 			} else {
 				Machine.emit(Op.LOAD, Reg.LB, ((UnknownValue) ref.decl.re).address);
+				/*
 				String[] args = arg.split("\\.");
 				// have to loadl displacement of x from a 
 				switch (ref.decl.type.typeKind) {
@@ -587,7 +588,7 @@ public class REDCreate implements Visitor<String, Object> {
 						if (fd.name.equals(args[1])) {
 							Machine.emit(Op.LOADL, ((UnknownValue) fd.re).address);
 							
-							if (!encode) {
+							if (!encode || args.length > 2) {
 								Machine.emit(Prim.fieldref);
 							}
 							break;
@@ -600,12 +601,12 @@ public class REDCreate implements Visitor<String, Object> {
 				default:
 				}
 				if (args.length == 2) {
-					Machine.emit(Prim.fieldref); 
+					//Machine.emit(Prim.fieldref); 
 					// now we have the location of the second object on the stack
 					
 				}
 				
-				
+			*/	
 			}
 		}
 		return null;
@@ -614,29 +615,34 @@ public class REDCreate implements Visitor<String, Object> {
 	@Override
 	public Object visitQRef(QualRef ref, String arg) {
 		// TODO Auto-generated method stub
-		
-		if (arg.equals("")) {
-			if (ref.ref instanceof ThisRef) {
-				
-			} else if (ref.ref instanceof QualRef) {
-				visitQRef((QualRef) ref.ref, ref.id.spelling + arg);
-			} else if (ref.ref instanceof IdRef) {
-				visitIdRef((IdRef) ref.ref, ref.id.spelling + arg);
-			} else {
-				
+		boolean encode = false;
+		boolean method = false;
+		if (in(arg, "!method")) {
+			method = true;
+		}
+		if (in(arg, "!encode")) {
+			encode = true;
+		}
+		System.out.println(arg);
+		String[] argss = arg.split("\\s+");
+		//System.out.println(ref.decl.type);
+		if (argss[0].equals("")) { // no more qualifiers afterward
+			visitReference(ref.ref, ref.id.spelling + arg);
+			if (!method) {
+				Machine.emit(Op.LOADL, ((UnknownValue) ref.decl.re).address);
+			}
+			if (!encode) {
+				Machine.emit(Prim.fieldref);
+			}
+		} else {
+			visitReference(ref.ref, ref.id.spelling + "." + arg);
+			if (!method) {
+
+				Machine.emit(Op.LOADL, ((UnknownValue) ref.decl.re).address);
+				Machine.emit(Prim.fieldref);
 			}
 			
-		} else {
-			if (ref.ref instanceof ThisRef) {
-				
-			} else if (ref.ref instanceof QualRef) {
-				visitQRef((QualRef) ref.ref, ref.id.spelling + "." + arg);
-			} else if (ref.ref instanceof IdRef) {
-				visitIdRef((IdRef) ref.ref, ref.id.spelling + "." + arg);
-			} else {
-				
-			}
-		}
+		} 
 		
 		return null;
 	}

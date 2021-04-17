@@ -42,7 +42,7 @@ public class Identification implements Visitor<String, Object> {
 	private void identificationError (String e) throws SyntaxError{
 		reporter.reportError(e);
 		//System.out.println(classDecs.toString());
-		System.out.println(curMemDecs.toString());
+		//System.out.println(curMemDecs.toString());
 		//System.out.println(otherMemDecs.toString());
 		//System.out.println(sit.peek().toString());
 		throw new SyntaxError();
@@ -109,11 +109,7 @@ public class Identification implements Visitor<String, Object> {
 	public Object visitPackage(Package prog, String arg) throws SyntaxError {
 		// (ClassDeclaration)*eot
 		
-		//IdentificationTable classScope = addPredefinedClasses();
-		//IdentificationTable classScope = new IdentificationTable();
-		//classScope.put("$$$CLASSSCOPE$$$", null);
-		//sit.add(classScope);
-		
+
 		try {
 		
 			for (ClassDecl c : prog.classDeclList) {
@@ -161,8 +157,7 @@ public class Identification implements Visitor<String, Object> {
 	public Object visitClassDecl(ClassDecl cd, String arg) throws SyntaxError {
 		// class id { ( FieldDeclaration | MethodDeclaration )* }
 		
-		//IdentificationTable memberScope = new IdentificationTable();
-		//sit.add(memberScope);
+
 		try {
 			for (FieldDecl fd: cd.fieldDeclList) {
 				visitFieldDecl(fd, arg);
@@ -180,8 +175,7 @@ public class Identification implements Visitor<String, Object> {
 				visitMethodDecl(md, arg);
 			}
 			
-			//removes memberScope 
-			//sit.pop();
+
 			return null;
 		} catch (SyntaxError e) {
 			throw e;
@@ -245,12 +239,7 @@ public class Identification implements Visitor<String, Object> {
 					visitStatement(md.statementList.get(i), arg);
 				}
 			}
-			
-			/*
-			for (Statement s: md.statementList) {
-				visitStatement(s, arg);
-			}
-			*/
+
 				
 			sit.pop(); //removes lev4 scope
 			sit.pop(); //removes paramScope
@@ -412,8 +401,6 @@ public class Identification implements Visitor<String, Object> {
 		// Type id = Expression ;
 		try {
 			visitExpression(stmt.initExp, arg + " " + stmt.varDecl.name);
-			// can't use declaration in expression -> this way there will be an error
-			// bc the variable will not have been declared
 			visitVarDecl(stmt.varDecl, arg);
 		
 		
@@ -638,13 +625,9 @@ public class Identification implements Visitor<String, Object> {
 
 	@Override
 	public Object visitNewObjectExpr(NewObjectExpr expr, String arg) throws SyntaxError{
-		// new ( id () )
-		
-		// we have to verify that the object isn't static and has been declared
-		// update: I don't think we can have static classes?? 
+ 
 		try {
 			visitClassType(expr.classtype, arg);
-			//expr.classtype.className.decl = (Declaration) visitClassType(expr.classtype, arg);
 	
 			return null;
 		} catch (SyntaxError e) {
@@ -702,81 +685,11 @@ public class Identification implements Visitor<String, Object> {
 				identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: cannot reference 'this' in static context!");
 			}
 			
-			if (arg.startsWith(".")) {			
-				// qualified reference
-				// https://stackoverflow.com/questions/7899525/how-to-split-a-string-by-space
-				String members = arg.split("\\s+")[0];
-				String[] memArray = members.split("\\.");
-				String thisClass = arg.split("\\s+")[1];
-				
-				ref.decl = classDecs.get(thisClass);
-
-				if (!curMemDecs.containsKey(memArray[1])) {
-					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Member '" + memArray[1] + "' not declared in '" + currentClass + "'!");
-				}
-				ClassDecl cd = null;
-	
-				MemberDecl md = (MemberDecl) curMemDecs.get(memArray[1]);
-
-				for (int i = 2; i < memArray.length; i++) {
-					if (md instanceof MethodDecl) {
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method '" + md.name + "' cannot be used as a qualified reference!");
-					}
-					switch (md.type.typeKind) {
-					case CLASS:
-						cd = (ClassDecl) visitClassType((ClassType)(md.type), arg);
-						break;
-					default:
-						// ERROR --> there are arguments left but the kind is bool, int, etc that can't have members
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Base type " + md.type.typeKind.toString() + " cannot have additional qualifiers!");
-					}
-					
-					if (otherMemDecs.containsKey(cd.name + "." + memArray[i])) {
-						md = (MemberDecl) otherMemDecs.get(cd.name + "." + memArray[i]);
-					} else {
-						if (!curMemDecs.containsKey(memArray[i])) {
-							identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[i] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
-						} else {
-							if (!cd.name.equals(currentClass)) {
-								identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[i] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
-							} else {
-								md = (MemberDecl) curMemDecs.get(memArray[i]);
-							}
-						}
-					}
-				}
-				
-				switch (md.type.typeKind) {
-				case CLASS:
-					visitClassType((ClassType)(md.type), arg);
-					break;
-				case ARRAY:
-					visitArrayType((ArrayType)(md.type), arg);
-					break;
-				default:
-				}
-				
-				if (md instanceof MethodDecl) {
-					if (md instanceof MethodDecl) {
-						boolean valid = false;
-						for (String i : args) {
-							if (i.equals("!callExpr")) {
-								valid = true;
-							}
-						}
-						if (! valid) {
-							identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method needs to be used in call expression!");
-						}
-					}
-				}
-				
-				return md;
-			} else {
-				
-				ref.decl = classDecs.get(currentClass);
-				visitClassType((ClassType)(ref.decl.type), arg);
-				return ref.decl;
+			ref.decl = classDecs.get(currentClass);
+			if (ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
+				visitClassType((ClassType) ref.decl.type, arg);
 			}
+			return ref.decl;
 			
 		} catch (SyntaxError e) {
 			throw e;
@@ -788,206 +701,164 @@ public class Identification implements Visitor<String, Object> {
 	public Object visitIdRef(IdRef ref, String arg) {
 		// id
 		try {
-			String[] args = arg.split("\\s+");
-			// varDecl stuff will be third argument
 			
-			if (arg.startsWith(".")) {
-				
-				if (args.length > 2 && ref.id.spelling.equals(args[2])){
-					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: cannot use variable name in declaration!");
-				} 
-				
-				String members = arg.split("\\s+")[0];
-				String[] memArray = members.split("\\.");
-				
-				// case scoped object
-				ref.decl = getDecl(ref.id.spelling);
-				if (ref.decl != null && ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
-					visitClassType((ClassType) ref.decl.type, arg);
+			
+			ref.decl = getDecl(ref.id.spelling);
+			
+			if (ref.decl != null) {
+				ref.decl = (Declaration) visitIdentifier(ref.id, arg);
+			}
+			
+			if (ref.decl == null) {
+				// case member of current class
+				ref.decl = curMemDecs.get(ref.id.spelling);
+			}
+			if (ref.decl == null) {
+				// case static class reference
+				ref.decl = classDecs.get(ref.id.spelling);
+				if(!in(arg, "!qualified")) {
+					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: static class is not variable!");
 				}
-				
-				if (ref.decl == null) {
-					// case member of current class
-					ref.decl = curMemDecs.get(ref.id.spelling);
-				}
-				if (ref.decl == null) {
-					// case static class reference
-					ref.decl = classDecs.get(ref.id.spelling);
-				} 
-				
-				if (ref.decl instanceof MethodDecl) {
-					// method can't have members at this point, which is guarenteed if it's a qualified reference (starts w '.')
+			} 
+			
+			
+			if (ref.decl instanceof MethodDecl) {
+
+				if (! in(arg, "!callExpr")) {
 					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method needs to be used in call expression!");
 				}
-				
-				if (ref.decl == null) {
-					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Member '" + ref.id.spelling + "' does not exist or is not accessible in specified class!");
-				}
-				
-				MemberDecl md = null;
-				if (ref.decl instanceof ClassDecl) {
+			}
+			
+			if (in(arg, ref.id.spelling) && !in(arg, "!qualified")) {
+				identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: cannot use variable name in declaration!");
+			}
 
-					if (otherMemDecs.containsKey(ref.decl.name  + "." + memArray[1])) {
-						md = (MemberDecl) otherMemDecs.get(ref.decl.name + "." + memArray[1]);
-					} else {
-						if (!args[1].equals(currentClass) || !curMemDecs.containsKey(memArray[1])) {
-							identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[1] + "' not found for class type '" + ref.decl.name + "' or not accessible from current scope!");
-						} else {
-							md = (MemberDecl) curMemDecs.get(memArray[1]);
-						}
-					}
-					
-					if (staticMethod && !md.isStatic) {
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ":  cannot access non-static member '" + md.name + "' in a static method!");
-					}
-
-				} else if (ref.decl instanceof MemberDecl) {
-					if (staticMethod && !((MemberDecl) ref.decl).isStatic) {
-						// cannot directly access a non-static member of class c if in a static method in class c
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ":  cannot access non-static member '" + ref.decl.name + "' in a static method!");
-						
-					}
-					if (! ((MemberDecl) ref.decl).type.typeKind.equals(TypeKind.CLASS)){
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Variable '" + ref.decl.name + "' is not class type!");
-						return ref.decl;
-					} 
-					ClassDecl cd = (ClassDecl) visitClassType((ClassType)((MemberDecl) ref.decl).type, arg);
-					
-					if (otherMemDecs.containsKey(cd.name + "." + memArray[1])) {
-						md = (MemberDecl) otherMemDecs.get(cd.name + "." + memArray[1]);
-					} else {
-						if (!args[1].equals(currentClass) || !curMemDecs.containsKey(memArray[1])) {
-							identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[1] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
-						} else {
-							md = (MemberDecl) curMemDecs.get(memArray[1]);
-						}
-					}
-				} else {
-					// scoped reference
-					if (!ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Cannot have qualified reference for variable of type " + ref.decl.type.typeKind + "!");
-					}
-					ClassDecl cd = (ClassDecl) visitClassType((ClassType)(ref.decl).type, arg);
-					
-					if (otherMemDecs.containsKey(cd.name + "." + memArray[1])) {
-						md = (MemberDecl) otherMemDecs.get(cd.name + "." + memArray[1]);
-					} else {
-						if (!args[1].equals(currentClass) || !curMemDecs.containsKey(memArray[1])) {
-							identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[1] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
-						} else {
-							md = (MemberDecl) curMemDecs.get(memArray[1]);
-						}
-					}
-				}
-				
-				
-				ClassDecl cd = null;
-				for (int i = 2; i < memArray.length; i++) {
-					if (md instanceof MethodDecl) {
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method '" + md.name + "' cannot be used as a qualified reference!");
-					}
-					switch (md.type.typeKind) {
-					case CLASS:
-						cd = (ClassDecl) visitClassType((ClassType)(md.type), arg);
-						break;
-					default:
-						// ERROR --> there are arguments left but the kind is bool, int, etc that can't have members
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Base types cannot have additional qualifiers!");
-					}
-					if (otherMemDecs.containsKey(cd.name + "." + memArray[i])) {
-						md = (MemberDecl) otherMemDecs.get(cd.name + "." + memArray[i]);
-					} else {
-						if (!curMemDecs.containsKey(memArray[i])) {
-							identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[i] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
-						} else {
-							if (!cd.name.equals(currentClass)) {
-								identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + memArray[i] + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
-							} else {
-								md = (MemberDecl) curMemDecs.get(memArray[i]);
-							}
-						}
-					}
-				}
-				
-				switch (md.type.typeKind) {
-				case CLASS:
-					visitClassType((ClassType)(md.type), arg);
-					break;
-				case ARRAY:
-					visitArrayType((ArrayType)(md.type), arg);
-					break;
-				default:
-				}
-				
-				if (md instanceof MethodDecl) {
-					boolean valid = false;
-					for (String i : args) {
-						if (i.equals("!callExpr")) {
-							valid = true;
-						}
-					}
-					if (! valid) {
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method needs to be used in call expression!");
-					}
-				}
-				
-				
-				return md;
-				
-			} else {
-				if (args.length > 1 && ref.id.spelling.equals(args[1])) {
-					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: cannot use variable name in declaration!");
-				}
-				
-				ref.decl = (Declaration) visitIdentifier(ref.id, arg);
-				
-				if (ref.decl instanceof MethodDecl) {
-					boolean valid = false;
-					for (String i : args) {
-						if (i.equals("!callExpr")) {
-							valid = true;
-						}
-					}
-					if (! valid) {
-						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Method needs to be used in call expression!");
-					}
-				}
-				
-				return ref.decl;
+			
+			if (ref.decl == null) {
+				identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Member '" + ref.id.spelling + "' does not exist or is not accessible in specified class!");
 			}
 			
 			
+			if (ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
+				visitClassType((ClassType) ref.decl.type, arg);
+			}
+			if (ref.decl.type.typeKind.equals(TypeKind.ARRAY)) {
+				visitArrayType((ArrayType) ref.decl.type, arg);
+			}
+			
+			return ref.decl;
+					
 		} catch (SyntaxError e) {
 			throw e;
 		}
+	}
+	
+	public boolean in(String args, String arg) {
+		boolean found = false;
+		String[] argss = args.split("\\s+");
+		for (String i : argss) {
+			if (i.equals(arg)) {
+				found = true;
+				break;
+			}
+		}
+		return found;
 	}
 
 	@Override
 	public Object visitQRef(QualRef ref, String arg) {
 		// Reference.id
+		
+		String[] args = arg.split("\\s+");
+		
 		try {
-			if (arg.startsWith(".")) {
-				ref.decl = (Declaration) visitReference(ref.ref, "." + ref.id.spelling + arg);
-				
-				if (ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
-					visitClassType((ClassType) ref.decl.type, arg);
-				}
-				if (ref.decl.type.typeKind.equals(TypeKind.ARRAY)) {
-					visitArrayType((ArrayType) ref.decl.type, arg);
-				}
-				return ref.decl;
+			Declaration prevDecl = null;
+			
+			if (in(arg, "!qualified")) {
+				prevDecl = (Declaration) visitReference(ref.ref, arg);
+
 			} else {
-				// current class name tacked on the end
-				ref.decl = (Declaration) visitReference(ref.ref, "." + ref.id.spelling + " " + arg);
-				
-				if (ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
-					visitClassType((ClassType) ref.decl.type, arg);
+				prevDecl = (Declaration) visitReference(ref.ref, arg + " !qualified");
+			}
+			
+			
+			if (prevDecl instanceof ClassDecl) {
+
+				if (otherMemDecs.containsKey(prevDecl.name + "." + ref.id.spelling)) {
+					ref.decl = (MemberDecl) otherMemDecs.get(prevDecl.name + "." + ref.id.spelling);
+				} else {
+					boolean cc = false;
+					for (String i : args) {
+						if (i.equals(currentClass)) {
+							cc = true;
+						}
+					}
+					if (!cc || !curMemDecs.containsKey(ref.id.spelling)) {
+						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + ref.id.spelling + "' not found for class type '" + currentClass + "' or not accessible from current scope!");
+					} else {
+						ref.decl = (MemberDecl) curMemDecs.get(ref.id.spelling);
+					}
 				}
-				if (ref.decl.type.typeKind.equals(TypeKind.ARRAY)) {
-					visitArrayType((ArrayType) ref.decl.type, arg);
+				
+				if (staticMethod && !((MemberDecl) ref.decl).isStatic) {
+					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ":  cannot access non-static member '" + ref.decl.name + "' in a static method!");
+				}
+
+			} else if (prevDecl instanceof MemberDecl) {
+				if (! ((MemberDecl) prevDecl).type.typeKind.equals(TypeKind.CLASS)){
+					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Variable '" + prevDecl.name + "' is not class type!");
+					return prevDecl;
+				} 
+				ClassDecl cd = (ClassDecl) visitClassType((ClassType)((MemberDecl) prevDecl).type, arg);
+				
+				if (otherMemDecs.containsKey(cd.name + "." + ref.id.spelling)) {
+					ref.decl = (MemberDecl) otherMemDecs.get(cd.name + "." + ref.id.spelling);
+				} else {
+					boolean cc = false;
+					for (String i : args) {
+						if (i.equals(currentClass)) {
+							cc = true;
+						}
+					}
+					if (!cc || !curMemDecs.containsKey(ref.id.spelling)) {
+						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + ref.id.spelling + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
+					} else {
+						ref.decl = (MemberDecl) curMemDecs.get(ref.id.spelling);
+					}
+				}
+			} else if (prevDecl instanceof MethodDecl) {
+				identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ":  method '" + prevDecl.name + "' cannot be used as qualified reference!");
+			} else {
+				// scoped reference
+				if (!prevDecl.type.typeKind.equals(TypeKind.CLASS)) {
+					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Cannot have qualified reference for variable of type " + prevDecl.type.typeKind + "!");
+				}
+				ClassDecl cd = (ClassDecl) visitClassType((ClassType)(prevDecl).type, arg);
+				
+				if (otherMemDecs.containsKey(cd.name + "." + ref.id.spelling)) {
+					ref.decl = (MemberDecl) otherMemDecs.get(cd.name + "." + ref.id.spelling);
+				} else {
+					if (!in(arg, currentClass) || !curMemDecs.containsKey(ref.id.spelling)) {
+						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: member '" + ref.id.spelling + "' not found for class type '" + cd.name + "' or not accessible from current scope!");
+					} else {
+						ref.decl = (MemberDecl) curMemDecs.get(ref.id.spelling);
+					}
 				}
 			}
+			
+			if (ref.decl instanceof MethodDecl && !in(arg, "!callExpr")){
+				identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: '" +  ref.decl.name + "' is not used properly in a call expression!");
+			}
+			
+			if (ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
+				visitClassType((ClassType) ref.decl.type, arg);
+			}
+			if (ref.decl.type.typeKind.equals(TypeKind.ARRAY)) {
+				visitArrayType((ArrayType) ref.decl.type, arg);
+			}
+			
 			return ref.decl;
+			
 		} catch (SyntaxError e) {
 			throw e;
 		}
