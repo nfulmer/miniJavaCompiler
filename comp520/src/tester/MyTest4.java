@@ -53,6 +53,33 @@ public class MyTest4 {
 				continue;
 			}
         }
+        
+        testDir = (new File(projDir + "/tests/pa3_tests").getCanonicalFile());
+        for (File x : testDir.listFiles()) {
+        	if (x.getName().startsWith("fail") 
+        			|| x.getName().startsWith("pass302.java") 
+        			|| x.getName().startsWith("pass303.java")
+        			|| x.getName().startsWith("pass306.java")
+        			|| x.getName().startsWith("pass307.java")
+        			|| x.getName().startsWith("pass327.java")
+        			|| x.getName().startsWith("pass331.java")
+        			|| x.getName().startsWith("pass332.java")
+        			|| x.getName().startsWith("pass34")
+        			|| x.getName().startsWith("pass35")
+        			|| x.getName().startsWith("pass36")
+        			|| x.getName().startsWith("pass37")
+        			|| x.getName().startsWith("pass38")
+        			|| x.getName().endsWith(".mJAM") || x.getName().endsWith(".asm") ) {
+        		continue;
+        	}
+        	System.out.println(x.getName());
+        	int returnCode = runTest(x); 
+        	if (returnCode == 1) {
+				System.err.println("### miniJava Compiler fails while processing test " + x.getName());
+				failures++;
+				continue;
+			}
+        }
     }
 	
 	 private static int runTest(File x) throws IOException, InterruptedException {

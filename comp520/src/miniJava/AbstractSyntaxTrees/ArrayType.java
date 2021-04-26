@@ -32,18 +32,18 @@ import miniJava.SyntacticAnalyzer.SourcePosition;
  */
 
 public class ArrayType extends TypeDenoter {
-		public int length;
-		
+		//public int length;
+		/*
 		public ArrayType(TypeDenoter eltType, SourcePosition posn, int length){
 	        super(TypeKind.ARRAY, posn);
 	        this.eltType = eltType;
 	        this.length = length;
-	    }
+	    }*/
 
 	    public ArrayType(TypeDenoter eltType, SourcePosition posn){
 	        super(TypeKind.ARRAY, posn);
 	        this.eltType = eltType;
-	        this.length = 0;
+	        //this.length = 0;
 	    }
 	        
 	    public <A,R> R visit(Visitor<A,R> v, A o) {

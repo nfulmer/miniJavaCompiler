@@ -4,12 +4,14 @@ import miniJava.SyntacticAnalyzer.SourcePosition;
 
 // added for PA4
 
-public class ArrayLengthExpr extends Expression {
+public class ArrayLengthExpr extends FieldDecl {
 	
 	public Reference r;
 
+	// STATIC CHECKS!!!
+	
 	public ArrayLengthExpr(Reference r, SourcePosition posn) {
-		super(posn);
+		super(false, false, new BaseType(TypeKind.INT, posn), "length", posn);
 		this.r = r;
 	}
 

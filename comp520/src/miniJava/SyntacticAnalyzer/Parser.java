@@ -58,7 +58,7 @@ public class Parser {
 	}
 	
 	private void parseError (String e) throws SyntaxError{
-		reporter.reportError("Parse error: " + e);
+		reporter.reportError("*** Parse error: " + e);
 		throw new SyntaxError();
 	}
 	
@@ -666,13 +666,13 @@ public class Parser {
 				cp = token.posn;
 				accept(new Token(TokenKind.RPAREN, ")", token.posn));
 				return new CallExpr(r, el, cp);
-			} else if (token.kind == TokenKind.LENGTH) {
+			} /*else if (token.kind == TokenKind.LENGTH) {
 				// the reference parse will accept the reference bits up until length
 				// added for PA4
 				cp = token.posn;
 				accept(new Token(TokenKind.LENGTH, "length", token.posn));
 				return new ArrayLengthExpr(r, cp);
-			} else {
+			} */ else {
 				return new RefExpr(r, r.posn);
 			}
 		default:
@@ -709,9 +709,9 @@ public class Parser {
 		if (token.kind == TokenKind.PERIOD) {
 			accept(new Token(TokenKind.PERIOD, ".", token.posn));
 			// added for pa4
-			if (token.kind == TokenKind.LENGTH) {
+			/*if (token.kind == TokenKind.LENGTH) {
 				return r;
-			}
+			}*/
 			Identifier id = new Identifier(token);
 			SourcePosition cp = token.posn;
 			accept(new Token(TokenKind.ID, "?", token.posn));

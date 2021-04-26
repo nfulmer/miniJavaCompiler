@@ -1,4 +1,6 @@
-package miniJava.CodeGeneration;
+package miniJava.CodeGenerator;
+
+import java.util.ArrayList;
 
 import mJAM.*;
 import mJAM.Machine.Op;
@@ -24,7 +26,14 @@ public class REDCreate implements Visitor<String, Object> {
 	
 	AST tree;
 	ErrorReporter reporter;
-	int offset = 0;
+	int staticOffset;
+	int offset;
+	int main;
+	int blockOffset;
+	int numBlocks;
+	MethodDecl mainMeth;
+	ArrayList<Patch> patches;
+	MethodDecl curMeth;
 
 	/*
 	 * encodeFetch and encodeAssign
@@ -36,27 +45,23 @@ public class REDCreate implements Visitor<String, Object> {
 		this.tree = tree;
 		this.reporter = reporter;
 		
+
+		curMeth = null;
+		offset = 0;
+		staticOffset = 0;
+		mainMeth = null;
+		patches = new ArrayList<Patch>();
+		blockOffset = 0;
+		numBlocks = 0;
+		
 		visitPackage((Package) tree, "");
 		
-		
-		/*Machine.emit(Op.LOADL,0);
-		Machine.emit(Op.PUSH, 1);
-		Machine.emit(Op.LOADL,1);
-		Machine.emit(Op.STORE,Machine.Reg.SB,0);
-		Machine.emit(Op.LOADL,2);
-		Machine.emit(Op.LOADL,3);
-		Machine.emit(Prim.add);
-		Machine.emit(Op.STORE,Machine.Reg.SB,0);
-
-		//Machine.emit(Op.CALL, Machine.Reg.CP.ordinal());
-		//Machine.emit(Prim.newarr);
-		Machine.emit(Op.HALT, 0, 0, 0);*/ 
 		
 	}
 	
 	private void REDError (String e) throws REDError{
 		reporter.reportError(e);
-		throw new REDError();
+		//throw new REDError();
 	}
 	
 	class REDError extends Error {
@@ -83,18 +88,12 @@ public class REDCreate implements Visitor<String, Object> {
 	@Override
 	public Object visitPackage(Package prog, String arg) {
 		
-		// what constitutes "unique?", can I have a private static void main(String[] args) method?
-		
-		MethodDecl main = null;
-
-		
 		// first pass to go through and generate runtime entities for each (?) of the declarations
 		for (ClassDecl c : prog.classDeclList) {
+
 			visitClassDecl(c, arg);
 					
 			for (MethodDecl md : c.methodDeclList) {
-				
-				// TODO: wtf is the displacement?? runtime entity
 				
 				if (!md.isPrivate && md.isStatic 
 						&& md.type.typeKind.equals(TypeKind.VOID) 
@@ -103,6 +102,9 @@ public class REDCreate implements Visitor<String, Object> {
 						//REDError("Error! Public static void main method needs one input argument!");
 						continue;
 					} else {
+						if (md.parameterDeclList.size() > 1) {
+							continue;
+						}
 						ParameterDecl pd = md.parameterDeclList.get(0);
 						if (!pd.type.typeKind.equals(TypeKind.ARRAY)) {
 							//REDError("Error! Public static void main method needs String[] input argument type!");
@@ -113,33 +115,10 @@ public class REDCreate implements Visitor<String, Object> {
 								continue;
 							}
 							
-							/* TODO: confirm it doesn't have to be called args */
-							if (!pd.name.equals("args")) {
-								//REDError("Error! Public static void main method needs 'args' input argument!");
-								continue;
-							} 
-							
-							if ((main != null)) {
-								REDError("Error! Cannot have mutiple public static void main methods!");
+							if ((mainMeth != null)) {
+								REDError("*** Error: Cannot have mutiple public static void main methods!");
 							} else {
-								//Machine.emit(Op.LOADL, 0);
-								
-								// testing that mJAM works
-								//Machine.emit(Op.LOADL, 15); 
-								//Machine.emit(Prim.putintnl); // a putintnl instruction in mJAM w value 15 on stack will produce >>> 15
-								
-								/*
-								 * emit code to call main and halt on return
-								 * - code starts at location 0 in code store
-								 * - create empty args array on heap
-								 * - call main (address L11 must be patched)
-								 * - on return halt w code 0
-								 */
-								//Machine.emit(Op.CALL, 0);
-								// need to add args onto the stack??
-								
-								//Machine.emit(op);
-								main = md;
+								mainMeth = md;
 							}
 						}
 						
@@ -148,71 +127,128 @@ public class REDCreate implements Visitor<String, Object> {
 			}
 		}
 		
-		if (main == null) {
-
-			REDError("Error! Need a unique public static void main method for the program!");
+		if (mainMeth == null) {
+			REDError("*** Error: Need a unique public static void main method for the program!");
+			return null;
 		} else {
 			Machine.emit(Op.LOADL, 0);
-			visitMethodDecl(main, arg); // generate code from main method and that's what's relevant
+			Machine.emit(Prim.newarr);
+			
+			patches.add(new Patch(mainMeth, Machine.nextInstrAddr()));
+			Machine.emit(Op.CALL, Reg.CB, 0);
 			Machine.emit(Op.HALT, 0, 0, 0); // run [[c]] = execute [[C]] HALT
+			
+			
+			for (ClassDecl c : prog.classDeclList) {
+				visitClassDecl(c, arg); 
+			}
+
+			
+			for (Patch p : patches) {
+				Machine.patch(p.address, p.md.re.offset);
+			}
+			
 		}
-		
-		/*for (ClassDecl c : prog.classDeclList) {
-			visitClassDecl(c, arg);
-		}*/
 		
 		return null;
 	}
 
 	@Override
 	public Object visitClassDecl(ClassDecl cd, String arg) {
-		cd.re = new UnknownValue(cd.fieldDeclList.size(), Machine.Reg.ST.ordinal()); // second one needs changed
-		int displacement = 0;
-		for (FieldDecl fd : cd.fieldDeclList) {
-			visitFieldDecl(fd, String.valueOf(displacement));
-			displacement++;
+		// what if the class has no fields or methods?
+		if (cd.re == null) {
+			// first pass
+	
+			int displacement = 0;
+			int staticFields = 0;
+			for (FieldDecl fd : cd.fieldDeclList) {
+				visitFieldDecl(fd, String.valueOf(displacement));
+				if (!fd.isStatic) {
+					displacement++;
+				} else {
+					staticFields++;
+				}
+			}
+			if (cd.fieldDeclList.size() - staticFields < 1) {
+				cd.re = new RuntimeEntity(1, Reg.OB, 0); // second one needs changed
+
+			} else {
+				cd.re = new RuntimeEntity(cd.fieldDeclList.size() - staticFields, Reg.OB, 0); // second one needs changed
+
+			}
+
+			
+			for (MethodDecl md : cd.methodDeclList) {
+				visitMethodDecl(md, arg);
+			}
+			return cd.fieldDeclList.size() - staticFields;
+		} else {
+			// second pass code generation
+			
+			for (FieldDecl fd : cd.fieldDeclList) {
+				visitFieldDecl(fd, arg);
+			}
+			
+			for (MethodDecl md : cd.methodDeclList) {
+				curMeth = md;
+				visitMethodDecl(md, arg);
+			}
+			return null;
 		}
 		
-		for (MethodDecl md : cd.methodDeclList) {
-			visitMethodDecl(md, arg);
-		}
-		return cd.fieldDeclList.size();
 	}
 
 	@Override
 	public Object visitFieldDecl(FieldDecl fd, String arg) {
-		// what about local values???
-		fd.re = new UnknownValue(1, Integer.valueOf(arg));
-		return 1;
+		// what if the field is private static? I guess it can't be accessed through the thing
+		if (fd.re == null) {
+			// first pass
+			if (fd.isStatic) {
+				Machine.emit(Op.PUSH, 1);
+				fd.re = new RuntimeEntity(1, Reg.SB, staticOffset);
+				staticOffset++;
+			} else {
+				fd.re = new RuntimeEntity(1, Reg.OB, Integer.valueOf(arg));
+			}
+			return 1;
+		} else {
+			// second pass idk -- static values???
+			return null;
+		}
+		
 	}
 
 	@Override
 	public Object visitMethodDecl(MethodDecl md, String arg) {
+		// what if method doesn't have any statements? what if it has only a return?
+		// what if it has a return and nothing else;
 		if (md.re == null) {
-			//System.out.println(Reg.CP.ordinal());
-			md.re = new UnknownValue(1, Reg.CP.ordinal()); // ??? idk slide 8 of miniJavaCodeGenExample
+			int i = -1;
+			for (ParameterDecl pd : md.parameterDeclList) {
+				visitParameterDecl(pd, String.valueOf(i));
+				i--;
+			}
+			md.re = new RuntimeEntity(1, Reg.CB, 0); // ??? idk slide 8 of miniJavaCodeGenExample
 		} else {
-			// arguments are added to the stack top before we execute the function
-			// we are actually executing
-
+			
+			numBlocks = 0;
+			offset = 3;
+			// second arg is offset from codebase
+			md.re = new RuntimeEntity(1, Reg.CB, Machine.nextInstrAddr()); 
 
 			for (ParameterDecl pd : md.parameterDeclList) {
 				//visitParameterDecl(pd, arg);
 			}
 			
-			//System.out.println(((UnknownValue) md.re).address);
-			
-			//Machine.emit(Op.CALL, 1);
-			
-			//Machine.emit(Op.CALL, ((UnknownValue) md.re).address); // in machine: goes back to whatever 
-			// address is called w call for the code pointer to continue executing at
-			
 			for (Statement s: md.statementList) {
 				visitStatement(s, arg);
 			}
 			
-			//Machine.emit(Op.RETURN, 0, 0, 0); 
-			// pop off the array argument
+			if (md.type.typeKind.equals(TypeKind.VOID)) {
+				Machine.emit(Op.RETURN, 0, 0, md.parameterDeclList.size()); 
+			} else {
+				// in return statement which is required
+			}
 		}
 		
 		return null;
@@ -220,67 +256,42 @@ public class REDCreate implements Visitor<String, Object> {
 
 	@Override
 	public Object visitParameterDecl(ParameterDecl pd, String arg) {
-		//pd.re = new UnknownValue(1, Machine.Reg.ST.ordinal()); // ???
-		switch (pd.type.typeKind) {
-		case ARRAY:
-			//Machine.emit(Prim.newarr);
-			break;
-		case INT:
-		case BOOLEAN:
-			//Machine.emit(Op.PUSH, 1);
-			break;
-		case CLASS:
-			//Machine.emit(Prim.newobj);
-			break;
-		default:
-			// TODO: other typekinds are void, null, unsupported and error
-		}
+		pd.re = new RuntimeEntity(1, Reg.LB, Integer.valueOf(arg)); // ???
 		return null;
 	}
 
 	@Override
 	public Object visitVarDecl(VarDecl decl, String arg) {
-		// 
-		// TODO Auto-generated method stub
-		//Machine.emit(Op.LOADL, 1); // size of new object, in this case int
-		// if array call newarr
-		// if object call newobj
+		// equals null
 		
 		// put a new object on the stack
-		offset += 1;
+		
 		Machine.emit(Op.PUSH, 1);
 		
-		// offset from LB
-		// System.out.println(Machine.Reg.LB.ordinal());
-		//decl.re = new UnknownValue(1, Machine.Reg.ST.ordinal() - Machine.Reg.LB.ordinal()); // displacement from the lobal base (LB)
-		
-		decl.re = new UnknownValue(1, offset - 1);
+		decl.re = new RuntimeEntity(1, Reg.LB, offset);
+		if (in(arg, "!block")) {
+			blockOffset++;
+		} 
+		offset++;
 		return 1;
 	}
 
 	@Override
 	public Object visitBaseType(BaseType type, String arg) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Object visitClassType(ClassType type, String arg) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Object visitArrayType(ArrayType type, String arg) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 	
 	public Object visitStatement(Statement s, String arg){
-			// redirect
-
-		// execute statement, updating variables, 
-		// no change in frame size on termination except varDeclStmt which extends frame by 1
 			if (s instanceof BlockStmt) {
 				visitBlockStmt((BlockStmt) s, arg);
 			} else if (s instanceof VarDeclStmt) {
@@ -303,44 +314,45 @@ public class REDCreate implements Visitor<String, Object> {
 
 	@Override
 	public Object visitBlockStmt(BlockStmt stmt, String arg) {
+		int oldOffset = blockOffset; // for nested blocks
+		blockOffset = 0;
 		for (Statement s : stmt.sl) {
-			visitStatement(s, arg);
+			visitStatement(s, arg + " !block");
 		}
+		Machine.emit(Op.POP, blockOffset);
+		offset -= blockOffset;
+		blockOffset = oldOffset;
+		
 		return null;
 	}
 
 	@Override
 	public Object visitVardeclStmt(VarDeclStmt stmt, String arg) {
-		// TODO Auto-generated method stub
-		// extend stack by 1
-		/*Machine.emit(Op.LOADL, Reg.LB, 0);
-		visitVarDecl(stmt.varDecl, arg);
-		visitExpression(stmt.initExp, arg);// expression puts result on top of stack
-		Machine.emit(Op.STORE, 0);
-		// test
-		Machine.emit(Op.LOADL, Reg.LB, 0);
-		Machine.emit(Prim.putintnl);*/ 
 
 		
 		visitVarDecl(stmt.varDecl, arg);
 		visitExpression(stmt.initExp, arg);
 		
-		Machine.emit(Op.STORE, Machine.Reg.LB, ((UnknownValue) stmt.varDecl.re).address); // displacement from LB
-		// store expression from stack into vardecl
-		//Machine.emit(Op.STORE, Machine.Reg.LB, 0);
+		Machine.emit(Op.STORE, stmt.varDecl.re.reg, stmt.varDecl.re.offset); 
+
 		return null;
 	}
 
 	@Override
 	public Object visitAssignStmt(AssignStmt stmt, String arg) {
-		// visitExpression puts the value on stack top 
-		// then encodeStore pops the value from ST and stores in ref
-		// TODO
-		if (stmt.ref instanceof QualRef) {
+		
+		
+		if (stmt.ref.decl instanceof FieldDecl && ((FieldDecl) stmt.ref.decl).isStatic) {
+			// static
+			visitExpression(stmt.val, arg);
+			encodeStore(stmt.ref);
+		} else if (stmt.ref instanceof QualRef) {
+			// qualified
 			encodeStore(stmt.ref);
 			visitExpression(stmt.val, arg);
 			Machine.emit(Prim.fieldupd);
 		} else {
+			// local
 			visitExpression(stmt.val, arg);
 			encodeStore(stmt.ref);
 		}
@@ -349,28 +361,32 @@ public class REDCreate implements Visitor<String, Object> {
 
 	@Override
 	public Object visitIxAssignStmt(IxAssignStmt stmt, String arg) {
-		// TODO Auto-generated method stub
+		visitReference(stmt.ref, arg); // puts address   of the array on the stack
+		visitExpression(stmt.ix, arg); // puts expression i on stack
+		visitExpression(stmt.exp, arg); // puts new value on stack
+		Machine.emit(Prim.arrayupd); // takes all three args and updates
 		return null;
 	}
 
 	@Override
 	public Object visitCallStmt(CallStmt stmt, String arg) {
-		// TODO Auto-generated method stub
-		// what do we do w the stmt.argList??
-		
-		//encodeMethodInvocation(stmt.methodRef);
-		
-		// FOR NOW: all of our call expressions are going to be System.out.println
-		for (Expression ex : stmt.argList) {
-			visitExpression(ex, arg);
+		for (int i = stmt.argList.size() - 1; i >= 0; i--) {
+			visitExpression(stmt.argList.get(i), arg); //load last ones first
 		}
-		visitReference(stmt.methodRef, " !method");
+		visitReference(stmt.methodRef, " !method"); // puts address of the reference on the stack
 		return null;
 	}
 
 	@Override
 	public Object visitReturnStmt(ReturnStmt stmt, String arg) {
-		// TODO Auto-generated method stub
+		if (stmt.returnExpr != null) {
+			visitExpression(stmt.returnExpr, arg); // puts return value on stack top
+			Machine.emit(Op.RETURN, 1, 0, curMeth.parameterDeclList.size()); 
+		} else {
+			Machine.emit(Op.RETURN, 0, 0, curMeth.parameterDeclList.size()); 
+		}
+		
+		
 		return null;
 	}
 
@@ -434,9 +450,9 @@ public class REDCreate implements Visitor<String, Object> {
 				visitNewObjectExpr((NewObjectExpr) e, arg);
 			} else if (e instanceof NewArrayExpr) {
 				visitNewArrayExpr((NewArrayExpr) e, arg);
-			} else if (e instanceof ArrayLengthExpr) {
+			} /*else if (e instanceof ArrayLengthExpr) {
 				visitArrayLengthExpr((ArrayLengthExpr) e, arg);
-			} 
+			} */
 			
 		return null;
 	}
@@ -450,35 +466,73 @@ public class REDCreate implements Visitor<String, Object> {
 
 	@Override
 	public Object visitBinaryExpr(BinaryExpr expr, String arg) {
-		visitExpression(expr.left, arg);
-		visitExpression(expr.right, arg);
+		int patchAddress;
+		int jumpTo;
+		if (expr.operator.spelling.equals("||")) {
+			visitExpression(expr.left, arg);
+			patchAddress = Machine.nextInstrAddr();
+			Machine.emit(Op.JUMPIF, 1, Reg.CB, 0); // if true skip over all this business, eats the actual value
+			
+			Machine.emit(Op.LOADL, 0); // reload the eaten value
+			visitExpression(expr.right, arg);
+			visitOperator(expr.operator, arg + " !binExpr");
+			Machine.emit(Op.JUMP, Reg.CB, Machine.nextInstrAddr() + 2); // you need to skip over where the 1 is reloaded
+			// (the jumpif command eats the value)
+			
+			jumpTo = Machine.nextInstrAddr();
+			Machine.emit(Op.LOADL, 1);
+			Machine.patch(patchAddress, jumpTo);
+			
+		} else if (expr.operator.spelling.equals("&&")) {
+			visitExpression(expr.left, arg);
+			patchAddress = Machine.nextInstrAddr();
+			Machine.emit(Op.JUMPIF, 0, Reg.CB, 0); // if true run the code, eats the actual value
+			
+			Machine.emit(Op.LOADL, 1); // reload the eaten value
+			visitExpression(expr.right, arg);
+			visitOperator(expr.operator, arg + " !binExpr");
+			Machine.emit(Op.JUMP, Reg.CB, Machine.nextInstrAddr() + 2);
+			
+			jumpTo = Machine.nextInstrAddr();
+			Machine.emit(Op.LOADL, 0);
+			Machine.patch(patchAddress, jumpTo);
+			
+		} else {
+			visitExpression(expr.left, arg);
+			visitExpression(expr.right, arg);
+			
+			visitOperator(expr.operator, arg + " !binExpr");
+		}
 		
-		visitOperator(expr.operator, arg + " !binExpr");
 		return null;
 	}
 
 	@Override
 	public Object visitRefExpr(RefExpr expr, String arg) {
-		// TODO Auto-generated method stub
 		visitReference(expr.ref, "");
 		return null;
 	}
 
 	@Override
 	public Object visitIxExpr(IxExpr expr, String arg) {
-		// TODO Auto-generated method stub
+		visitReference(expr.ref, arg); // puts array address on stack
+		visitExpression(expr.ixExpr, arg); // puts expression i on stack
+		Machine.emit(Prim.arrayref); // puts the value from the array on the stack
 		return null;
 	}
 
 	@Override
 	public Object visitCallExpr(CallExpr expr, String arg) {
-		// TODO Auto-generated method stub
+		for (int i = expr.argList.size() - 1; i >= 0; i--) {
+			visitExpression(expr.argList.get(i), arg); //load last ones first
+		}
+		
+		visitReference(expr.functionRef, " !method"); // puts address of the reference on the stack
 		return null;
 	}
 
 	@Override
 	public Object visitLiteralExpr(LiteralExpr expr, String arg) {
-		// TODO Auto-generated method stub\	
 		switch(expr.lit.kind) {
 		case NUM:
 			visitIntLiteral((IntLiteral) expr.lit, arg);
@@ -498,16 +552,17 @@ public class REDCreate implements Visitor<String, Object> {
 
 	@Override
 	public Object visitNewObjectExpr(NewObjectExpr expr, String arg) {
-		// TODO Auto-generated method stub
 		Machine.emit(Op.LOADL, -1); // need to change if i implement inheritance
 		Machine.emit(Op.LOADL, expr.classtype.className.decl.re.size);
 		Machine.emit(Prim.newobj);
+		
 		return null;
 	}
 
 	@Override
 	public Object visitNewArrayExpr(NewArrayExpr expr, String arg) {
-		// TODO Auto-generated method stub
+		visitExpression(expr.sizeExpr, arg); // puts # of elements on stack
+		Machine.emit(Prim.newarr);
 		return null;
 	}
 	
@@ -536,12 +591,17 @@ public class REDCreate implements Visitor<String, Object> {
 	
 	public void encodeStore(Reference r) {
 		// R denotes a localdecl or fielddecl, pop value from stack top and store it in R
-		
-		if (r instanceof IdRef) {
-			Machine.emit(Op.STORE, Reg.LB, ((UnknownValue) r.decl.re).address);
+		if (r.decl instanceof FieldDecl && ((FieldDecl) r.decl).isStatic) {
+			Machine.emit(Op.STORE, r.decl.re.reg, r.decl.re.offset);
+		} else if (r instanceof IdRef) {
+			Machine.emit(Op.STORE, r.decl.re.reg, r.decl.re.offset);
 		} else if (r instanceof QualRef) {
 			visitQRef((QualRef) r, " !encode");
+			//Machine.emit(Op.STORE, Reg.OB, ((UnknownValue) r.decl.re).address);
 		}
+		
+		// what if reference is this ref? --> illegal, can't be assigned
+		// what if length field? --> illegal, can't be assigned
 		
 	}
 	
@@ -551,105 +611,115 @@ public class REDCreate implements Visitor<String, Object> {
 
 	@Override
 	public Object visitThisRef(ThisRef ref, String arg) {
-		// TODO Auto-generated method stub
+		// loads object base of current LB onto the stack --> Reg.OB holds this value
+		//System.out.println();
+		Machine.emit(Op.LOADA, ref.decl.re.reg, ref.decl.re.offset); 
 		return null;
 	}
 
 	@Override
 	public Object visitIdRef(IdRef ref, String arg) {
-		// TODO Auto-generated method stub
-		boolean encode = false;
-		if (in(arg, "!encode")) {
-			encode = true;
-		}
-		//System.out.println(arg);
-		String[] argss = arg.split("\\s+");
-		arg = argss[0];
 		
-		if (arg.equals("")) {
-			//loads address on stack
-			Machine.emit(Op.LOADL, ((UnknownValue) ref.decl.re).address);
-			// loads value from address on stack
-			Machine.emit(Op.LOADI); 
-		} else {
-			// qualified reference
-			arg = ref.id.spelling + "." + arg;
-			if (arg.equals("System.out.println")) {
-				Machine.emit(Prim.putintnl);
-			} else {
-				Machine.emit(Op.LOAD, Reg.LB, ((UnknownValue) ref.decl.re).address);
-				/*
-				String[] args = arg.split("\\.");
-				// have to loadl displacement of x from a 
-				switch (ref.decl.type.typeKind) {
-				case CLASS:
-					ClassDecl cd = (ClassDecl) ((ClassType) ref.decl.type).className.decl;
-					for (FieldDecl fd : cd.fieldDeclList) {
-						if (fd.name.equals(args[1])) {
-							Machine.emit(Op.LOADL, ((UnknownValue) fd.re).address);
-							
-							if (!encode || args.length > 2) {
-								Machine.emit(Prim.fieldref);
-							}
-							break;
-							// TODO: multiple args
-							// we actually need to load the field reference from the first object onto stack (will have heap address)
-							// then we need to get the displacement 
-							// THEN we need to put the value we want to store then we can update it
-						}
-					}
-				default:
-				}
-				if (args.length == 2) {
-					//Machine.emit(Prim.fieldref); 
-					// now we have the location of the second object on the stack
-					
-				}
+		if (in(ref.id.spelling + "." + arg, "System.out.println")) {
+			// alias for System.out.println
+			Machine.emit(Prim.putintnl);
+			return 1;
+		} else if (ref.decl instanceof MethodDecl) {
+			
+			if (((MethodDecl) ref.decl).isStatic) {
+				patches.add(new Patch((MethodDecl) ref.decl, Machine.nextInstrAddr()));
 				
-			*/	
-			}
-		}
-		return null;
-	}
-
-	@Override
-	public Object visitQRef(QualRef ref, String arg) {
-		// TODO Auto-generated method stub
-		boolean encode = false;
-		boolean method = false;
-		if (in(arg, "!method")) {
-			method = true;
-		}
-		if (in(arg, "!encode")) {
-			encode = true;
-		}
-		System.out.println(arg);
-		String[] argss = arg.split("\\s+");
-		//System.out.println(ref.decl.type);
-		if (argss[0].equals("")) { // no more qualifiers afterward
-			visitReference(ref.ref, ref.id.spelling + arg);
-			if (!method) {
-				Machine.emit(Op.LOADL, ((UnknownValue) ref.decl.re).address);
-			}
-			if (!encode) {
-				Machine.emit(Prim.fieldref);
-			}
-		} else {
-			visitReference(ref.ref, ref.id.spelling + "." + arg);
-			if (!method) {
-
-				Machine.emit(Op.LOADL, ((UnknownValue) ref.decl.re).address);
-				Machine.emit(Prim.fieldref);
+				Machine.emit(Op.CALL, ref.decl.re.reg, ref.decl.re.offset); // offset from code base 
+			} else {
+				// implicit this.method
+				Machine.emit(Op.LOADA, Reg.OB, 0); 
+				patches.add(new Patch((MethodDecl) ref.decl, Machine.nextInstrAddr()));
+				Machine.emit(Op.CALLI, ref.decl.re.reg, ref.decl.re.offset); // offset from code base 
 			}
 			
+			
+		} else {
+			//System.out.println(ref.decl);
+			if (ref.decl instanceof ClassDecl && ref.id.spelling.equals(ref.decl.name)) {
+				//System.out.println(ref.id.spelling);
+				//System.out.println(ref.decl.name);
+				// Static reference
+				// System.out.println(ref.decl.name);
+				// don't need to actually do anything because the future things will get it
+				// but what if it is an object? like a.p where p is static
+				// TODO there would be excess arguments on the stack, right??
+				// it seems like after a method, the stack cleans up after itself 
+				// and if any values were overridden then it wouldn't matter
+				// but what if there's like a super long qualified reference or something?
+				// load random value?
+				Machine.emit(Op.LOADL, 0); // placeholder value
+			} else {
+				//System.out.println(ref.decl);
+				Machine.emit(Op.LOAD, ref.decl.re.reg, ref.decl.re.offset);
+			}
 		} 
 		
 		return null;
 	}
 
 	@Override
+	public Object visitQRef(QualRef ref, String arg) {
+		boolean encode = false;
+
+		if (in(arg, "!encode")) {
+			encode = true;
+		}
+		String[] argss = arg.split("\\s+");
+
+		Object print = null;
+
+		if (argss[0].equals("")) { // no more qualifiers afterward
+			print = visitReference(ref.ref, ref.id.spelling + arg);
+
+			if (ref.decl instanceof MethodDecl && print == null) {
+				if (((MethodDecl) ref.decl).isStatic) {
+					Machine.emit(Op.POP, 1); // pop the pre-loaded values from stack
+					patches.add(new Patch((MethodDecl) ref.decl, Machine.nextInstrAddr()));
+					Machine.emit(Op.CALL, ref.decl.re.reg, ref.decl.re.offset); // offset from code base 
+				} else {
+					patches.add(new Patch((MethodDecl) ref.decl, Machine.nextInstrAddr()));
+					Machine.emit(Op.CALLI, ref.decl.re.reg, ref.decl.re.offset); // offset from code base 
+				}
+			} else if (print == null){
+				if (ref.decl instanceof FieldDecl && ((FieldDecl) ref.decl).isStatic) {
+					Machine.emit(Op.POP, 1);
+					Machine.emit(Op.LOAD, ref.decl.re.reg, ref.decl.re.offset);
+				} else if (ref.decl instanceof ArrayLengthExpr) {
+					Machine.emit(Prim.arraylen);
+				} else {
+					Machine.emit(Op.LOADL, ref.decl.re.offset);
+					if (!encode) {
+						Machine.emit(Prim.fieldref);
+					}
+				}
+			}
+		} else {
+			print = visitReference(ref.ref, ref.id.spelling + "." + arg);
+			if (!(ref.decl instanceof MethodDecl) && print == null) {
+				// TODO ???
+				if (ref.decl instanceof FieldDecl && ((FieldDecl) ref.decl).isStatic) {
+					// maybe remove the previous loading of a value on the stack?
+					Machine.emit(Op.POP, 1);
+					Machine.emit(Op.LOAD, ref.decl.re.reg, ref.decl.re.offset);
+				} else {
+					Machine.emit(Op.LOADL, ref.decl.re.offset);
+					Machine.emit(Prim.fieldref);
+				}
+				
+			}
+			
+		}
+		
+		return print;
+	}
+
+	@Override
 	public Object visitIdentifier(Identifier id, String arg) {
-		// TODO Auto-generated method stub
 		
 		return null;
 	}
@@ -726,16 +796,17 @@ public class REDCreate implements Visitor<String, Object> {
 
 	@Override
 	public Object visitNullLiteral(NullLiteral nulll, String arg) {
-		// TODO Auto-generated method stub
 		// null rep is 0???
 		Machine.emit(Op.LOADL, 0);
 		return null;
 	}
 
+	/*
 	@Override
 	public Object visitArrayLengthExpr(ArrayLengthExpr al, String arg) {
-		// TODO Auto-generated method stub
+		visitReference(al.r, arg); // loads array address on the stack??
+		Machine.emit(Prim.arraylen);
 		return null;
-	}
+	}*/
 
 }

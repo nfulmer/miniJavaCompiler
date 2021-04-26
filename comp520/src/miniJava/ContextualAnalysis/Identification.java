@@ -281,6 +281,7 @@ public class Identification implements Visitor<String, Object> {
 			} else if (decl.type.typeKind.equals(TypeKind.ARRAY)) {
 				visitArrayType((ArrayType) decl.type, arg);
 			}
+		
 			
 			
 			Stack<IdentificationTable> holder = new Stack<IdentificationTable>();
@@ -400,7 +401,7 @@ public class Identification implements Visitor<String, Object> {
 	public Object visitVardeclStmt(VarDeclStmt stmt, String arg) throws SyntaxError {
 		// Type id = Expression ;
 		try {
-			visitExpression(stmt.initExp, arg + " " + stmt.varDecl.name);
+			visitExpression(stmt.initExp, arg + " !" + stmt.varDecl.name);
 			visitVarDecl(stmt.varDecl, arg);
 		
 		
@@ -414,7 +415,11 @@ public class Identification implements Visitor<String, Object> {
 	public Object visitAssignStmt(AssignStmt stmt, String arg) throws SyntaxError {
 		// Reference = Expression ;
 		try {
-			visitReference(stmt.ref, arg);
+			if (stmt.ref instanceof ThisRef) {
+				identificationError("*** line " + String.valueOf(stmt.posn.getPosition()) + ": 'this' cannot be assigned!");
+			}
+			
+			visitReference(stmt.ref, arg + " !assign");
 			visitExpression(stmt.val, arg);
 			
 			return null;
@@ -501,24 +506,24 @@ public class Identification implements Visitor<String, Object> {
 	Object visitExpression(Expression e, String arg) throws SyntaxError{
 		try {
 			if (e instanceof UnaryExpr) {
-				visitUnaryExpr((UnaryExpr) e, arg);
+				return visitUnaryExpr((UnaryExpr) e, arg);
 			} else if (e instanceof BinaryExpr) {
-				visitBinaryExpr((BinaryExpr) e, arg);
+				return visitBinaryExpr((BinaryExpr) e, arg);
 			} else if (e instanceof RefExpr) {
-				visitRefExpr((RefExpr) e, arg);
+				return visitRefExpr((RefExpr) e, arg);
 			} else if (e instanceof IxExpr) {
-				visitIxExpr((IxExpr) e, arg);
+				return visitIxExpr((IxExpr) e, arg);
 			} else if (e instanceof CallExpr) {
-				visitCallExpr((CallExpr) e, arg);
+				return visitCallExpr((CallExpr) e, arg);
 			} else if (e instanceof LiteralExpr) {
-				visitLiteralExpr((LiteralExpr) e, arg);
+				return visitLiteralExpr((LiteralExpr) e, arg);
 			} else if (e instanceof NewObjectExpr) {
-				visitNewObjectExpr((NewObjectExpr) e, arg);
+				return visitNewObjectExpr((NewObjectExpr) e, arg);
 			} else if (e instanceof NewArrayExpr) {
-				visitNewArrayExpr((NewArrayExpr) e, arg);
-			} else if (e instanceof ArrayLengthExpr) {
-				visitArrayLengthExpr((ArrayLengthExpr) e, arg);
-			} else {
+				return visitNewArrayExpr((NewArrayExpr) e, arg);
+			} /*else if (e instanceof ArrayLengthExpr) {
+				return visitArrayLengthExpr((ArrayLengthExpr) e, arg);
+			} */ else {
 				identificationError("*** line " + String.valueOf(e.posn.getPosition()) + ": Expression not recognized type!");
 			}
 			
@@ -638,6 +643,9 @@ public class Identification implements Visitor<String, Object> {
 	@Override
 	public Object visitNewArrayExpr(NewArrayExpr expr, String arg) throws SyntaxError{
 		// new ( int [ Expression ] | id [ Expression ] )
+		
+		//((ArrayType) expr.eltType).length = (int) visitExpression(expr.sizeExpr, arg);
+		
 		try {
 			switch (expr.eltType.typeKind) {
 			case INT:
@@ -650,6 +658,7 @@ public class Identification implements Visitor<String, Object> {
 			}
 			
 			visitExpression(expr.sizeExpr, arg);
+
 			
 			return null;
 		} catch (SyntaxError e) {
@@ -701,8 +710,6 @@ public class Identification implements Visitor<String, Object> {
 	public Object visitIdRef(IdRef ref, String arg) {
 		// id
 		try {
-			
-			
 			ref.decl = getDecl(ref.id.spelling);
 			
 			if (ref.decl != null) {
@@ -716,7 +723,7 @@ public class Identification implements Visitor<String, Object> {
 			if (ref.decl == null) {
 				// case static class reference
 				ref.decl = classDecs.get(ref.id.spelling);
-				if(!in(arg, "!qualified")) {
+				if(ref.decl != null && !in(arg, "!qualified")) {
 					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: static class is not variable!");
 				}
 			} 
@@ -729,7 +736,7 @@ public class Identification implements Visitor<String, Object> {
 				}
 			}
 			
-			if (in(arg, ref.id.spelling) && !in(arg, "!qualified")) {
+			if (in(arg, "!" + ref.id.spelling) && !in(arg, "!qualified")) {
 				identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: cannot use variable name in declaration!");
 			}
 
@@ -781,6 +788,10 @@ public class Identification implements Visitor<String, Object> {
 				prevDecl = (Declaration) visitReference(ref.ref, arg + " !qualified");
 			}
 			
+			if (prevDecl instanceof ArrayLengthExpr) {
+				identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Error: Array length cannot have qualifiers after!");
+			}
+			
 			
 			if (prevDecl instanceof ClassDecl) {
 
@@ -805,10 +816,21 @@ public class Identification implements Visitor<String, Object> {
 				}
 
 			} else if (prevDecl instanceof MemberDecl) {
-				if (! ((MemberDecl) prevDecl).type.typeKind.equals(TypeKind.CLASS)){
+				if (! ((MemberDecl) prevDecl).type.typeKind.equals(TypeKind.CLASS) && (!((MemberDecl) prevDecl).type.typeKind.equals(TypeKind.ARRAY) || !ref.id.spelling.equals("length"))){
 					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Variable '" + prevDecl.name + "' is not class type!");
 					return prevDecl;
-				} 
+				} else if (((MemberDecl) prevDecl).type.typeKind.equals(TypeKind.ARRAY) && ref.id.spelling.equals("length")) {
+					if (in(arg, "!assign")) {
+						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Error: array length field cannot be assigned!");
+					} else {
+						ref.decl = new ArrayLengthExpr(ref, null);
+						return ref.decl;
+					}
+					
+				} else if (((MemberDecl) prevDecl).type.typeKind.equals(TypeKind.ARRAY)) {
+					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Variable '" + prevDecl.name + "' is not class type!");
+
+				}
 				ClassDecl cd = (ClassDecl) visitClassType((ClassType)((MemberDecl) prevDecl).type, arg);
 				
 				if (otherMemDecs.containsKey(cd.name + "." + ref.id.spelling)) {
@@ -830,7 +852,16 @@ public class Identification implements Visitor<String, Object> {
 				identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ":  method '" + prevDecl.name + "' cannot be used as qualified reference!");
 			} else {
 				// scoped reference
-				if (!prevDecl.type.typeKind.equals(TypeKind.CLASS)) {
+				if (prevDecl.type.typeKind.equals(TypeKind.ARRAY) && ref.id.spelling.equals("length")) {
+					if (in(arg, "!assign")) {
+						identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Error: array length field cannot be assigned!");
+					} else {
+						ref.decl = new ArrayLengthExpr(ref, null);
+					}
+					return ref.decl;
+				}
+				
+				if (!prevDecl.type.typeKind.equals(TypeKind.CLASS) ) {
 					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Cannot have qualified reference for variable of type " + prevDecl.type.typeKind + "!");
 				}
 				ClassDecl cd = (ClassDecl) visitClassType((ClassType)(prevDecl).type, arg);
@@ -910,10 +941,10 @@ public class Identification implements Visitor<String, Object> {
 		return null;
 	}
 
-	@Override
+	/*
 	public Object visitArrayLengthExpr(ArrayLengthExpr al, String arg) {
 		visitReference(al.r, arg);
 		return null;
-	}
+	}*/
 
 }

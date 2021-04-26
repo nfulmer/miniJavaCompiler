@@ -60,6 +60,6 @@ public interface Visitor<ArgType,ResultType> {
     // added pa3
 	public ResultType visitNullLiteral(NullLiteral nulll, ArgType arg);
 	
-	// added pa4
-	public ResultType visitArrayLengthExpr(ArrayLengthExpr al, ArgType arg);
+	// added pa4 - jk
+	// public ResultType visitArrayLengthExpr(ArrayLengthExpr al, ArgType arg);
 }

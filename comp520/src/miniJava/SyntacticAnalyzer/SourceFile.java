@@ -14,7 +14,41 @@ public class SourceFile {
 		String t;
 		System.out.println("TESTING - DEBUG MODE");
 		
-		return pass337();
+		return pass3012();
+	}
+	
+	
+	public String pass3012() {
+		return "class Comp520{"
+				+ "public static void main(String[] ard){"
+				+ "bb b = new bb();"
+				+ "b.loud();"
+				+ "return;"
+				+"}"
+				+ "}"
+				+ "class bb{"
+				+ "void loud(){"
+				+ "this = new bb();"
+				+ "}"
+				+ ""
+				+ "}";
+	}
+	
+	public String pass304() {
+		return "/**\r\n" + 
+				" * COMP 520\r\n" + 
+				" * Identification\r\n" + 
+				" */\r\n" + 
+				"class Pass304 {         \r\n" + 
+				"    public static void main(String[] args) {} \r\n" + 
+				"\r\n" + 
+				"    public void foo(Pass304 x) {\r\n" + 
+				"        int Pass304 = 3; \r\n" + 
+				"        Pass304 y = x;   /* not hidden */\r\n" + 
+				"        System.out.println(Pass304);\r\n" + 
+				"\r\n" + 
+				"    }\r\n" + 
+				"}";
 	}
 	
 	public String pass337() {

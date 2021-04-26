@@ -317,8 +317,17 @@ public class TypeChecking implements Visitor<String, Object> {
 			return null;
 		}
 		
+		/*
+		if (equals(declaration, assignExpr, stmt.posn)) {
+			//PA 4 ???
+			if (declaration instanceof ArrayType && assignExpr instanceof ArrayType
+					&& ((ArrayType) assignExpr).eltType.typeKind != TypeKind.ERROR) {
+				stmt.varDecl.type = assignExpr;
+			}
+		}*/
 		
 		equals(declaration, assignExpr, stmt.posn);
+		
 		return null;
 	}
 
@@ -338,7 +347,17 @@ public class TypeChecking implements Visitor<String, Object> {
 			return null;
 		}
 		
+		/*
+		if (equals(var, expr, stmt.posn)) {
+			//PA 4 ???
+			if (var instanceof ArrayType && expr instanceof ArrayType
+					&& ((ArrayType) expr).eltType.typeKind != TypeKind.ERROR) {
+				stmt.ref.decl.type = expr;
+			}
+		}*/
+		
 		equals(var, expr, stmt.posn);
+		
 		return null;
 	}
 
@@ -449,9 +468,9 @@ public class TypeChecking implements Visitor<String, Object> {
 			return visitNewObjectExpr((NewObjectExpr) e, arg);
 		} else if (e instanceof NewArrayExpr) {
 			return visitNewArrayExpr((NewArrayExpr) e, arg);
-		} else if (e instanceof ArrayLengthExpr) {
+		} /*else if (e instanceof ArrayLengthExpr) {
 			return visitArrayLengthExpr((ArrayLengthExpr) e, arg);
-		} else {
+		} */ else {
 			typeError("*** line " + String.valueOf(e.posn.getPosition()) + ": Expression not recognized type!");
 		}
 		
@@ -561,6 +580,7 @@ public class TypeChecking implements Visitor<String, Object> {
 	@Override
 	public Object visitNewArrayExpr(NewArrayExpr expr, String arg) {
 		// TODO verify class
+		
 		switch(expr.eltType.typeKind) {
 		case INT:
 		case BOOLEAN:
@@ -607,6 +627,8 @@ public class TypeChecking implements Visitor<String, Object> {
 		// TODO verify class
 		if (ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
 			return ((ClassType) ref.decl.type).className.decl.type;
+		} else if (ref.decl instanceof ArrayLengthExpr) {
+			return new BaseType(TypeKind.INT, ref.posn);
 		} else {
 			return ref.decl.type;
 		}
@@ -640,6 +662,7 @@ public class TypeChecking implements Visitor<String, Object> {
 		return new BaseType(TypeKind.NULL, nulll.posn);
 	}
 
+	/*
 	@Override
 	public Object visitArrayLengthExpr(ArrayLengthExpr al, String arg) {
 		// how to specify what the actual value is? do we need to?
@@ -650,6 +673,6 @@ public class TypeChecking implements Visitor<String, Object> {
 		} else {
 			return new BaseType(TypeKind.INT, al.posn);		
 		}
-	}
+	}*/
 
 }
