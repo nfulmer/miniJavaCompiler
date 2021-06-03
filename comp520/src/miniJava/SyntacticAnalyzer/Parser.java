@@ -135,7 +135,7 @@ public class Parser {
 			accept(new Token(TokenKind.ACCESS, "static", token.posn));
 		}
 		
-		//TypeKinds are void, int, boolean, class, array, unsuported, and error 
+		//TypeKinds are void, int, boolean, class, string, array, unsuported, and error 
 		if (token.kind.equals(TokenKind.VOID)) {
 			SourcePosition cp = token.posn;
 			accept(new Token(TokenKind.VOID, "void", token.posn));
@@ -149,7 +149,7 @@ public class Parser {
 		SourcePosition cp = token.posn;
 		accept(new Token( TokenKind.ID, "?", token.posn));
 		
-		fd = new FieldDecl(isPrivate, isStatic, td, name, cp);
+		fd = new FieldDecl(isPrivate, isStatic, td, name, null, cp);
 		
 		switch(token.kind) {
 		case LPAREN:
@@ -161,6 +161,14 @@ public class Parser {
 				parseError("Cannot have a void type for field" + " at " + String.valueOf(token.posn.getPosition()));
 			}
 			return fd;
+		case EQUALS:
+			accept(new Token(TokenKind.EQUALS, "=", token.posn));
+			if (fd.type.typeKind == TypeKind.VOID) {
+				parseError("Cannot have a void type for field" + " at " + String.valueOf(token.posn.getPosition()));
+			}
+			Expression ix = parseExpression();
+			accept(new Token(TokenKind.SEMICOLON, ";", token.posn));
+			return new FieldDecl(isPrivate, isStatic, td, name, ix, cp);
 		default:
 			parseError("Invalid Term - expecting SEMICOLON or LPAREN but found " + token.kind + " at " + String.valueOf(token.posn.getPosition()));
 			fd.type.typeKind = TypeKind.ERROR;
@@ -180,7 +188,7 @@ public class Parser {
 	void parseTypeFieldOrMethod() throws SyntaxError{
 		
 	}*/
-	//Type ::= int | boolean | id | ( int | id ) [] 
+	//Type ::= int | boolean | id | String | ( String | int | id ) [] 
 	TypeDenoter parseType() throws SyntaxError {
 		SourcePosition cp;
 		switch(token.kind) {
@@ -210,6 +218,17 @@ public class Parser {
 				return new ArrayType(new ClassType(id, token.posn), cp);
 			} else {
 				return new ClassType(id, cp);
+			}
+		case STRING:
+			cp = token.posn;
+			accept(new Token( TokenKind.STRING, "?", token.posn));
+			if (token.kind == TokenKind.LBRACK) {
+				accept(new Token( TokenKind.LBRACK, "[", token.posn));
+				cp = token.posn;
+				accept(new Token( TokenKind.RBRACK, "]", token.posn));
+				return new ArrayType(new BaseType(TypeKind.STRING, cp), cp);
+			} else {
+				return new BaseType(TypeKind.STRING, cp);
 			}
 		default:
 			parseError("Invalid Term - expecting INT, BOOLEAN, or ID but found " + token.kind + " at " + String.valueOf(token.posn.getPosition()));
@@ -359,6 +378,7 @@ public class Parser {
 		
 		switch(token.kind) {
 		case INT:
+		case STRING:
 		case BOOLEAN: 
 			t = parseType();
 			name = token.spelling;
@@ -469,8 +489,8 @@ public class Parser {
 | unop Expression | MINUS Expression
 | Expression binop Expression
 | ( Expression )
-| num | true | false | null TODO: verify null
-| new ( id () | int [ Expression ] | id [ Expression ] )
+| num | true | false | null string literal
+| new ( id () | int [ Expression ] | id [ Expression ] | String [ Expression ] )
 	 */
 	Expression parseExpression() {
 		SourcePosition cp;
@@ -566,7 +586,7 @@ public class Parser {
 					 | Reference ( ArgumentList? )
 					 | unop Expression | MINUS Expression
 					 | ( Expression )
-					 | num | true | false | null
+					 | num | true | false | null | string
 					 | new ( id () | int [ Expression ] | id [ Expression ] )
 					 	 */
 	Expression parseZ() throws SyntaxError {
@@ -603,6 +623,10 @@ public class Parser {
 		case NUM:
 			exp = new LiteralExpr(new IntLiteral(token), token.posn);
 			accept(new Token(TokenKind.NUM, "?", token.posn));
+			return exp;
+		case STRINGLIT:
+			exp = new LiteralExpr(new StringLiteral(token), token.posn);
+			accept(new Token(TokenKind.STRINGLIT, "?", token.posn));
 			return exp;
 		case TRUE:
 			exp = new LiteralExpr(new BooleanLiteral(token), token.posn);
@@ -642,6 +666,13 @@ public class Parser {
 				cp = token.posn;
 				accept(new Token(TokenKind.RBRACK, "]", token.posn));
 				return new NewArrayExpr(new BaseType(TypeKind.INT, cp), subExp, cp);
+			case STRING:
+				accept(new Token(TokenKind.STRING, "String", token.posn));
+				accept(new Token(TokenKind.LBRACK, "[", token.posn));
+				subExp = parseExpression();
+				cp = token.posn;
+				accept(new Token(TokenKind.RBRACK, "]", token.posn));
+				return new NewArrayExpr(new BaseType(TypeKind.STRING, cp), subExp, cp);
 			default:
 				parseError("Invalid Term - expecting INT or ID but found " + token.kind + " at " + String.valueOf(token.posn.getPosition()));
 				return new RefExpr(null, token.posn);

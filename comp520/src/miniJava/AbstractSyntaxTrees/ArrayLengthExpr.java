@@ -11,7 +11,8 @@ public class ArrayLengthExpr extends FieldDecl {
 	// STATIC CHECKS!!!
 	
 	public ArrayLengthExpr(Reference r, SourcePosition posn) {
-		super(false, false, new BaseType(TypeKind.INT, posn), "length", posn);
+		// TODO: is arraylength initialized as 0?
+		super(false, false, new BaseType(TypeKind.INT, posn), "length", null, posn);
 		this.r = r;
 	}
 

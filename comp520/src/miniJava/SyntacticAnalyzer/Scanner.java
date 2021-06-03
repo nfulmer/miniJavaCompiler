@@ -205,6 +205,8 @@ arithmetic operators: + - * / */
 			// added array length for pa4 --> jk
 			/*case "length":
 				return new Token(TokenKind.LENGTH, "length", sposn);*/
+			case "String":
+				return new Token(TokenKind.STRING, "String", sposn);
 			case "null":
 				return new Token(TokenKind.NULL, "null", sposn);
 			case "true":
@@ -241,6 +243,14 @@ arithmetic operators: + - * / */
 				return new Token(TokenKind.ID, currentSpelling.toString(), sposn);
 			}
 			
+		} else if (currentChar == '"') {
+			readChar();
+			while (currentChar != '"') {
+				currentSpelling.append(currentChar);
+				readChar();
+			}
+			readChar(); // read the second quotes
+			return new Token(TokenKind.STRINGLIT, currentSpelling.toString(), sposn);
 		} else if (Character.isDigit(currentChar)) {
 			//boolean decimal = false;
 			while(Character.isDigit(currentChar) /*|| currentChar == '.'*/) {

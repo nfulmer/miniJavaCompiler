@@ -33,7 +33,6 @@ public class TypeChecking implements Visitor<String, Object> {
 	}
 	
 	boolean equals(TypeDenoter t1, TypeDenoter t2, SourcePosition posn) {
-		// TODO: verify
 		
 		if (t1.typeKind.equals(TypeKind.UNSUPPORTED) || t2.typeKind.equals(TypeKind.UNSUPPORTED)) {
 			typeError("*** line " + String.valueOf(posn.getPosition()) + ": type mismatch between " + t2.typeKind.toString() + " and " + t1.typeKind.toString() + "!");
@@ -110,7 +109,8 @@ public class TypeChecking implements Visitor<String, Object> {
 	boolean okOper(TypeKind tk, Operator o) {
 		if (tk.equals(TypeKind.ERROR)) {
 			return true;
-		} else if (tk.equals(TypeKind.UNSUPPORTED)) {
+		} else if (tk.equals(TypeKind.UNSUPPORTED) || tk.equals(TypeKind.STRING)) {
+			// can't do any string operations
 			return false;
 		}
 		if (o.spelling == "-") {
@@ -141,12 +141,14 @@ public class TypeChecking implements Visitor<String, Object> {
 			typeError("*** line " + String.valueOf(sp.getPosition()) + ": type mismatch between " + t2.typeKind.toString() + " and " + t1.typeKind.toString() + "!");
 			return false;
 		}
+		// no operations supported between two strings
+		
 		if (t1.typeKind.equals(TypeKind.ARRAY)) {
 			// have to check that array is the right type
-		if (((ArrayType) t1).eltType.typeKind.equals(TypeKind.UNSUPPORTED)) {
-			typeError("*** line " + String.valueOf(sp.getPosition()) + ": type mismatch between " + t2.typeKind.toString() + " and " + ((ArrayType) t1).eltType.typeKind.toString() + "!");
-			return false;
-		}
+			if (((ArrayType) t1).eltType.typeKind.equals(TypeKind.UNSUPPORTED)) {
+				typeError("*** line " + String.valueOf(sp.getPosition()) + ": type mismatch between " + t2.typeKind.toString() + " and " + ((ArrayType) t1).eltType.typeKind.toString() + "!");
+				return false;
+			}
 		}
 		if (t2.typeKind.equals(TypeKind.ARRAY)) {
 			// have to check that array is the right type
@@ -163,6 +165,10 @@ public class TypeChecking implements Visitor<String, Object> {
 		if ((o.spelling == "==" || o.spelling == "!=") && (t1.typeKind.equals(TypeKind.NULL) || t2.typeKind.equals(TypeKind.NULL))) {
 			// null can be legally tested for (in)equality against any object
 			return true;
+		}
+		if (t1.typeKind.equals(TypeKind.STRING) || t1.typeKind.equals(TypeKind.STRING)) {
+			typeError("*** line " + String.valueOf(sp.getPosition()) + ": no operations are supported with STRINGS!");
+			return false;
 		}
 		if (o.spelling == "||" || o.spelling == "&&") {
 			if(!(t1.typeKind.equals(TypeKind.ERROR) || t1.typeKind.equals(TypeKind.BOOLEAN))) {
@@ -228,6 +234,17 @@ public class TypeChecking implements Visitor<String, Object> {
 
 	@Override
 	public Object visitFieldDecl(FieldDecl fd, String arg) {
+		if (fd.ix != null) {
+			TypeDenoter assignExpr = (TypeDenoter) visitExpression(fd.ix, arg);
+			
+			if (assignExpr.typeKind.equals(TypeKind.NULL)) {
+				return null;
+			}
+			
+			equals(fd.type, assignExpr, fd.posn);
+			
+			return null;
+		}
 		return null;
 	}
 
@@ -265,7 +282,6 @@ public class TypeChecking implements Visitor<String, Object> {
 
 	@Override
 	public Object visitArrayType(ArrayType type, String arg) {
-		// TODO verify??
 		return type;
 	}
 
@@ -317,15 +333,6 @@ public class TypeChecking implements Visitor<String, Object> {
 			return null;
 		}
 		
-		/*
-		if (equals(declaration, assignExpr, stmt.posn)) {
-			//PA 4 ???
-			if (declaration instanceof ArrayType && assignExpr instanceof ArrayType
-					&& ((ArrayType) assignExpr).eltType.typeKind != TypeKind.ERROR) {
-				stmt.varDecl.type = assignExpr;
-			}
-		}*/
-		
 		equals(declaration, assignExpr, stmt.posn);
 		
 		return null;
@@ -347,15 +354,6 @@ public class TypeChecking implements Visitor<String, Object> {
 			return null;
 		}
 		
-		/*
-		if (equals(var, expr, stmt.posn)) {
-			//PA 4 ???
-			if (var instanceof ArrayType && expr instanceof ArrayType
-					&& ((ArrayType) expr).eltType.typeKind != TypeKind.ERROR) {
-				stmt.ref.decl.type = expr;
-			}
-		}*/
-		
 		equals(var, expr, stmt.posn);
 		
 		return null;
@@ -367,9 +365,6 @@ public class TypeChecking implements Visitor<String, Object> {
 		if (!arrayIndex.equals(TypeKind.INT)) {
 			typeError("*** line " + String.valueOf(stmt.posn.getPosition()) + ": Type Error: cannot index array with expression of type " + arrayIndex.toString() + "!");
 		}
-		// need cases int[] banana = new int[?];
-		// and banana[0] = 2;
-		
 		
 		if (stmt.ref.decl instanceof ClassDecl || stmt.ref.decl instanceof MethodDecl) {
 			typeError("*** line " + String.valueOf(stmt.posn.getPosition()) + ": Type Error: cannot index class or method!");
@@ -507,7 +502,6 @@ public class TypeChecking implements Visitor<String, Object> {
 
 	@Override
 	public Object visitIxExpr(IxExpr expr, String arg) {
-		// TODO: class type??
 		TypeKind arrayIndex = ((TypeDenoter) visitExpression(expr.ixExpr, arg)).typeKind;
 		if (!arrayIndex.equals(TypeKind.INT)) {
 			typeError("*** line " + String.valueOf(expr.posn.getPosition()) + ": Type Error: cannot index array with expression of type " + arrayIndex.toString() + "!");
@@ -526,7 +520,6 @@ public class TypeChecking implements Visitor<String, Object> {
 
 	@Override
 	public Object visitCallExpr(CallExpr expr, String arg) {
-		// TODO class type
 		TypeDenoter decl;
 		TypeDenoter exprT;
 		if (!(expr.functionRef.decl instanceof MethodDecl)) {
@@ -562,6 +555,8 @@ public class TypeChecking implements Visitor<String, Object> {
 			return new BaseType(TypeKind.INT, expr.posn);
 		case NULL:
 			return new BaseType(TypeKind.NULL, expr.posn);
+		case STRINGLIT:
+			return new BaseType(TypeKind.STRING, expr.posn);
 		default:
 			return new BaseType(TypeKind.UNSUPPORTED, expr.posn);
 		}
@@ -569,25 +564,20 @@ public class TypeChecking implements Visitor<String, Object> {
 
 	@Override
 	public Object visitNewObjectExpr(NewObjectExpr expr, String arg) {
-		//TODO: verify new classtype
-		// return new ClassType
 		
-		// prev: return expr.classtype;
-		return expr.classtype.className.decl.type; //-- apparently, new strings are fine then
-		//return expr.classtype;
+		return expr.classtype.className.decl.type; 
 	}
 
 	@Override
 	public Object visitNewArrayExpr(NewArrayExpr expr, String arg) {
-		// TODO verify class
 		
 		switch(expr.eltType.typeKind) {
+		case STRING:
 		case INT:
 		case BOOLEAN:
 		case NULL:
 			return new ArrayType(new BaseType(expr.eltType.typeKind, expr.posn), expr.posn);
 		case CLASS:
-			//return new ArrayType((ClassType) expr.eltType, expr.posn);
 			return new ArrayType(((ClassType) expr.eltType).className.decl.type, expr.posn);
 		default:
 			return new BaseType(TypeKind.UNSUPPORTED, expr.posn);
@@ -614,7 +604,6 @@ public class TypeChecking implements Visitor<String, Object> {
 
 	@Override
 	public Object visitIdRef(IdRef ref, String arg) {
-		// TODO verify class, used to be no if
 		if (ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
 			return ((ClassType) ref.decl.type).className.decl.type;
 		} else {
@@ -624,7 +613,6 @@ public class TypeChecking implements Visitor<String, Object> {
 
 	@Override
 	public Object visitQRef(QualRef ref, String arg) {
-		// TODO verify class
 		if (ref.decl.type.typeKind.equals(TypeKind.CLASS)) {
 			return ((ClassType) ref.decl.type).className.decl.type;
 		} else if (ref.decl instanceof ArrayLengthExpr) {
@@ -662,17 +650,9 @@ public class TypeChecking implements Visitor<String, Object> {
 		return new BaseType(TypeKind.NULL, nulll.posn);
 	}
 
-	/*
 	@Override
-	public Object visitArrayLengthExpr(ArrayLengthExpr al, String arg) {
-		// how to specify what the actual value is? do we need to?
-		
-		if (!al.r.decl.type.typeKind.equals(TypeKind.ARRAY)) {
-			typeError("*** line " + String.valueOf(al.posn.getPosition()) + ": Type Error: only Array types have a length field!");
-			return new BaseType(TypeKind.INT, al.posn);
-		} else {
-			return new BaseType(TypeKind.INT, al.posn);		
-		}
-	}*/
+	public Object visitStringLiteral(StringLiteral sl, String arg) {
+		return new BaseType(TypeKind.STRING, sl.posn);
+	}
 
 }

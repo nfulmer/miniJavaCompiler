@@ -14,14 +14,25 @@ import miniJava.SyntacticAnalyzer.TokenKind;
 public class REDCreate implements Visitor<String, Object> {
 	
 	/*
-	 * Two RED functions:
-	 * 1) traverse all Declarations creating runtime entity descriptor (RED) for each declaration --> first traversal THEN run the main method
-	 * 2) generate instructions in code store for each method in each class
-	 */
-	
-	/*
-	 * classes and other constants known at compile time are allocated on the stack in the global segment
-	 * with runtime objects added dynamically on top of those
+	 * PA5 extensions:
+	 * - 2 static field initialization (i think i already have this)
+	 * - 2 parameterized class constructors (There should only be one constructor per 
+	 * class, but it may have parameters. If none is defined, the default constructor should be available.
+	 * - 3 for loops. Be sure to consider the possible forms of the initialization (including declaration of the iterator variable), loop test, and increment parts
+	 * - 1 - 3: Improve code generation for the condition (test) in while and if statements,
+focusing on efficient evaluation of short-circuit boolean operators && and ||.
+Ideally, efficient evaluation means: (1) minimize alternation between jumps and
+construction of truth values on the stack and (2) no chains of consecutive jumps
+without intervening tests in the evaluation of a conditional expression. Partial
+credit is available for anything that improves on the base strategy.
+
+- 4 Add the String type and string literals. No operations need to be supported on
+strings, but you must be able to assign a string literal or a String reference to a
+variable of type String, and it must be possible to print String values by
+overloading System.out.println().
+
+- 5 Add overloaded methods that differ in the types of their arguments, and
+perform type checking to determine their validity and to resolve overloading.
 	 */
 	
 	AST tree;
@@ -30,6 +41,7 @@ public class REDCreate implements Visitor<String, Object> {
 	int offset;
 	int main;
 	int blockOffset;
+	int returnOffset;
 	int numBlocks;
 	MethodDecl mainMeth;
 	ArrayList<Patch> patches;
@@ -49,6 +61,7 @@ public class REDCreate implements Visitor<String, Object> {
 		curMeth = null;
 		offset = 0;
 		staticOffset = 0;
+		returnOffset = 0;
 		mainMeth = null;
 		patches = new ArrayList<Patch>();
 		blockOffset = 0;
@@ -110,7 +123,7 @@ public class REDCreate implements Visitor<String, Object> {
 							//REDError("Error! Public static void main method needs String[] input argument type!");
 							continue;
 						} else {
-							if (!((ArrayType) pd.type).eltType.typeKind.equals(TypeKind.UNSUPPORTED)) {
+							if (!((ArrayType) pd.type).eltType.typeKind.equals(TypeKind.STRING)) {
 								//REDError("Error! Public static void main method needs String[] input argument type!");
 								continue;
 							}
@@ -131,6 +144,14 @@ public class REDCreate implements Visitor<String, Object> {
 			REDError("*** Error: Need a unique public static void main method for the program!");
 			return null;
 		} else {
+			// before main method call, need to load all our static variable initializations
+			for (ClassDecl c : prog.classDeclList) {
+				for (FieldDecl fd : c.fieldDeclList) {
+					visitFieldDecl(fd, arg);
+				}
+			}
+			
+			
 			Machine.emit(Op.LOADL, 0);
 			Machine.emit(Prim.newarr);
 			
@@ -185,9 +206,9 @@ public class REDCreate implements Visitor<String, Object> {
 		} else {
 			// second pass code generation
 			
-			for (FieldDecl fd : cd.fieldDeclList) {
+			/*for (FieldDecl fd : cd.fieldDeclList) {
 				visitFieldDecl(fd, arg);
-			}
+			}*/
 			
 			for (MethodDecl md : cd.methodDeclList) {
 				curMeth = md;
@@ -212,7 +233,12 @@ public class REDCreate implements Visitor<String, Object> {
 			}
 			return 1;
 		} else {
-			// second pass idk -- static values???
+			// second pass static values??? have to initialize them on second pass 
+			// once the class runtime entities are determined
+			if (fd.isStatic && fd.ix != null) {
+				visitExpression(fd.ix, arg);
+				Machine.emit(Op.STORE, fd.re.reg, fd.re.offset); 
+			}
 			return null;
 		}
 		
@@ -316,10 +342,11 @@ public class REDCreate implements Visitor<String, Object> {
 	public Object visitBlockStmt(BlockStmt stmt, String arg) {
 		int oldOffset = blockOffset; // for nested blocks
 		blockOffset = 0;
+		returnOffset = 0;
 		for (Statement s : stmt.sl) {
 			visitStatement(s, arg + " !block");
 		}
-		Machine.emit(Op.POP, blockOffset);
+		Machine.emit(Op.POP, blockOffset + returnOffset);
 		offset -= blockOffset;
 		blockOffset = oldOffset;
 		
@@ -374,6 +401,16 @@ public class REDCreate implements Visitor<String, Object> {
 			visitExpression(stmt.argList.get(i), arg); //load last ones first
 		}
 		visitReference(stmt.methodRef, " !method"); // puts address of the reference on the stack
+		if (!((MethodDecl) stmt.methodRef.decl).type.typeKind.equals(TypeKind.VOID)){
+			// not void
+			/*
+			if (in(arg, "!block")) {
+				blockOffset++;
+			}*/
+			if (in(arg, "!block")) {
+				returnOffset++;
+			}
+		}
 		return null;
 	}
 
@@ -450,10 +487,7 @@ public class REDCreate implements Visitor<String, Object> {
 				visitNewObjectExpr((NewObjectExpr) e, arg);
 			} else if (e instanceof NewArrayExpr) {
 				visitNewArrayExpr((NewArrayExpr) e, arg);
-			} /*else if (e instanceof ArrayLengthExpr) {
-				visitArrayLengthExpr((ArrayLengthExpr) e, arg);
-			} */
-			
+			} 
 		return null;
 	}
 
@@ -544,6 +578,9 @@ public class REDCreate implements Visitor<String, Object> {
 		case NULL:
 			visitNullLiteral((NullLiteral) expr.lit, arg);
 			break;
+		case STRINGLIT:
+			visitStringLiteral((StringLiteral) expr.lit, arg);
+			break;
 		default: 
 
 		}
@@ -579,15 +616,6 @@ public class REDCreate implements Visitor<String, Object> {
 		return null;
 	}
 	
-	/*
-	 * encodeFetch
-	 * encodeStore
-	 * encodeMethodInvocation
-	 */
-	
-	public void encodeFetch(Reference r) {
-		// R  denotes a localDecl or fieldDecl, load value at Decl at stacktop
-	}
 	
 	public void encodeStore(Reference r) {
 		// R denotes a localdecl or fielddecl, pop value from stack top and store it in R
@@ -604,10 +632,6 @@ public class REDCreate implements Visitor<String, Object> {
 		// what if length field? --> illegal, can't be assigned
 		
 	}
-	
-	public void encodeMethodInvocation(Reference r) {
-		// R denotes a methoddecl, calli or call w needed args
-	}
 
 	@Override
 	public Object visitThisRef(ThisRef ref, String arg) {
@@ -619,12 +643,7 @@ public class REDCreate implements Visitor<String, Object> {
 
 	@Override
 	public Object visitIdRef(IdRef ref, String arg) {
-		
-		if (in(ref.id.spelling + "." + arg, "System.out.println")) {
-			// alias for System.out.println
-			Machine.emit(Prim.putintnl);
-			return 1;
-		} else if (ref.decl instanceof MethodDecl) {
+		if (ref.decl instanceof MethodDecl) {
 			
 			if (((MethodDecl) ref.decl).isStatic) {
 				patches.add(new Patch((MethodDecl) ref.decl, Machine.nextInstrAddr()));
@@ -639,22 +658,16 @@ public class REDCreate implements Visitor<String, Object> {
 			
 			
 		} else {
-			//System.out.println(ref.decl);
 			if (ref.decl instanceof ClassDecl && ref.id.spelling.equals(ref.decl.name)) {
-				//System.out.println(ref.id.spelling);
-				//System.out.println(ref.decl.name);
-				// Static reference
-				// System.out.println(ref.decl.name);
-				// don't need to actually do anything because the future things will get it
-				// but what if it is an object? like a.p where p is static
-				// TODO there would be excess arguments on the stack, right??
-				// it seems like after a method, the stack cleans up after itself 
-				// and if any values were overridden then it wouldn't matter
-				// but what if there's like a super long qualified reference or something?
-				// load random value?
-				Machine.emit(Op.LOADL, 0); // placeholder value
+				
+				// fake System.out.println should be VarDecl (?)
+				if (in(ref.id.spelling + "." + arg, "System.out.println")){
+					return 1;
+				} else {
+					Machine.emit(Op.LOADL, 0); // placeholder value
+				}
+				
 			} else {
-				//System.out.println(ref.decl);
 				Machine.emit(Op.LOAD, ref.decl.re.reg, ref.decl.re.offset);
 			}
 		} 
@@ -672,11 +685,43 @@ public class REDCreate implements Visitor<String, Object> {
 		String[] argss = arg.split("\\s+");
 
 		Object print = null;
+		
 
 		if (argss[0].equals("")) { // no more qualifiers afterward
 			print = visitReference(ref.ref, ref.id.spelling + arg);
+			if (print != null) {
+				//System.out.println(ref.decl.name);
+				if (ref.decl instanceof MethodDecl && ((MethodDecl) ref.decl).parameterDeclList.get(0).type.typeKind.equals(TypeKind.STRING)) {
+					// address of the string literal should be loaded
 
-			if (ref.decl instanceof MethodDecl && print == null) {
+					Machine.emit(Op.LOAD, Reg.ST, -1); // address loaded again
+					Machine.emit(Prim.arraylen); // get the arraylen
+					Machine.emit(Op.LOADL, 0); // int i
+					int jumpAddr = Machine.nextInstrAddr();
+					Machine.emit(Op.JUMP, Reg.CB, 0); // need CB to patch to
+					// visitStatement
+					int jumpDo = Machine.nextInstrAddr();
+					Machine.emit(Op.LOAD, Reg.ST, -3); // address
+					Machine.emit(Op.LOAD, Reg.ST, -2); // int i loaded again
+					Machine.emit(Prim.arrayref);
+					Machine.emit(Prim.put);
+					Machine.emit(Op.LOADL, 1); // add 1 to int
+					Machine.emit(Prim.add);
+					// visitExpression
+					int jumpEval = Machine.nextInstrAddr();
+					Machine.emit(Op.LOAD, Reg.ST, -1); // int i
+					Machine.emit(Op.LOAD, Reg.ST, -3); // length
+					Machine.emit(Prim.lt); // int i < length (length first, i second)
+					Machine.emit(Op.JUMPIF, 1, Reg.CB, jumpDo); // if true run the code
+					Machine.emit(Prim.puteol);
+					Machine.patch(jumpAddr, jumpEval);
+					// arrayref array addr a, element index i ==> ..., a[i]
+					// put each character on the stack top
+					// puteol
+				} else {
+					Machine.emit(Prim.putintnl);
+				}
+			} else if (ref.decl instanceof MethodDecl ) {
 				if (((MethodDecl) ref.decl).isStatic) {
 					Machine.emit(Op.POP, 1); // pop the pre-loaded values from stack
 					patches.add(new Patch((MethodDecl) ref.decl, Machine.nextInstrAddr()));
@@ -685,7 +730,7 @@ public class REDCreate implements Visitor<String, Object> {
 					patches.add(new Patch((MethodDecl) ref.decl, Machine.nextInstrAddr()));
 					Machine.emit(Op.CALLI, ref.decl.re.reg, ref.decl.re.offset); // offset from code base 
 				}
-			} else if (print == null){
+			} else {
 				if (ref.decl instanceof FieldDecl && ((FieldDecl) ref.decl).isStatic) {
 					Machine.emit(Op.POP, 1);
 					Machine.emit(Op.LOAD, ref.decl.re.reg, ref.decl.re.offset);
@@ -700,6 +745,7 @@ public class REDCreate implements Visitor<String, Object> {
 			}
 		} else {
 			print = visitReference(ref.ref, ref.id.spelling + "." + arg);
+			// neither out nor System load anything on the stack
 			if (!(ref.decl instanceof MethodDecl) && print == null) {
 				// TODO ???
 				if (ref.decl instanceof FieldDecl && ((FieldDecl) ref.decl).isStatic) {
@@ -711,7 +757,7 @@ public class REDCreate implements Visitor<String, Object> {
 					Machine.emit(Prim.fieldref);
 				}
 				
-			}
+			} 
 			
 		}
 		
@@ -801,12 +847,23 @@ public class REDCreate implements Visitor<String, Object> {
 		return null;
 	}
 
-	/*
 	@Override
-	public Object visitArrayLengthExpr(ArrayLengthExpr al, String arg) {
-		visitReference(al.r, arg); // loads array address on the stack??
-		Machine.emit(Prim.arraylen);
+	public Object visitStringLiteral(StringLiteral sl, String arg) {
+		// need to make an array of chars
+		// Character.getNumericValue(char)
+		//System.out.println(sl.spelling);
+		Machine.emit(Op.LOADL, sl.spelling.length()); // length of new array
+		Machine.emit(Prim.newarr); // leaves array address on the stack
+		for (int i = 0; i < sl.spelling.length(); i++) {
+			//Machine.emit(Op.PUSH, 1); // pushes the array address again so we don't eat it
+			Machine.emit(Op.LOAD, Reg.ST, -1);
+			Machine.emit(Op.LOADL, i); // offset from the array
+			Machine.emit(Op.LOADL, (int) sl.spelling.charAt(i)); // the char as new int val
+			Machine.emit(Prim.arrayupd); // eats three values and returns no result
+		}
+		
+		// address of the char array left on the stack
 		return null;
-	}*/
+	}
 
 }

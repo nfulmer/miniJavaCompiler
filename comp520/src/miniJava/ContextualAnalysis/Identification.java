@@ -83,7 +83,7 @@ public class Identification implements Visitor<String, Object> {
 	
 	// class System { public static _PrintStream out; }
 	FieldDeclList sFdl = new FieldDeclList();
-	FieldDecl fd = new FieldDecl(false, true, new ClassType(new Identifier(new Token(TokenKind.ID, "_PrintStream", sp)), sp), "out", sp);
+	FieldDecl fd = new FieldDecl(false, true, new ClassType(new Identifier(new Token(TokenKind.ID, "_PrintStream", sp)), sp), "out", null, sp);
 	sFdl.add(fd);
 	classDecs.put("System", new ClassDecl("System", sFdl, new MethodDeclList(), sp));
 	otherMemDecs.put("System." + fd.name, fd);
@@ -93,16 +93,27 @@ public class Identification implements Visitor<String, Object> {
 	ParameterDeclList psPdl = new ParameterDeclList();
 	psPdl.add(new ParameterDecl(new BaseType(TypeKind.INT, sp), "n", sp));
 	MethodDecl md = new MethodDecl(
-			new FieldDecl(false, false, new BaseType(TypeKind.VOID, sp), "println", sp), 
+			new FieldDecl(false, false, new BaseType(TypeKind.VOID, sp), "println", null, sp), 
 			psPdl,
 			new StatementList(),
 			sp);
+	// class _PrintStream { public void println(String n){}; }
+	ParameterDeclList psPdl2 = new ParameterDeclList();
+	psPdl2.add(new ParameterDecl(new BaseType(TypeKind.STRING, sp), "n", sp));
+	MethodDecl md2 = new MethodDecl(
+			new FieldDecl(false, false, new BaseType(TypeKind.VOID, sp), "println", null, sp), 
+			psPdl2,
+			new StatementList(),
+			sp);
 	otherMemDecs.put("_PrintStream." + md.name, md);
+	otherMemDecs.put("_PrintStream." + md2.name + "String", md2);
 	psMdl.add(md);
+	psMdl.add(md2);
 	classDecs.put("_PrintStream", new ClassDecl("_PrintStream", new FieldDeclList(), psMdl, sp));
 	
-	classDecs.put("String", new ClassDecl("String", new BaseType(TypeKind.UNSUPPORTED, sp), new FieldDeclList(), new MethodDeclList(), sp));
-	
+	//classDecs.put("String", new ClassDecl("String", new BaseType(TypeKind.STRING, sp), new FieldDeclList(), new MethodDeclList(), sp));
+	//classDecs.put("String", new ClassDecl("String", new FieldDeclList(), new MethodDeclList(), sp));
+
 	} 
 
 	@Override
@@ -195,6 +206,14 @@ public class Identification implements Visitor<String, Object> {
 				visitClassType((ClassType) fd.type, arg);
 			} else if (fd.type.typeKind.equals(TypeKind.ARRAY)) {
 				visitArrayType((ArrayType) fd.type, arg);
+			}
+			
+			if (fd.ix != null) {
+				if (!fd.isStatic) {
+					identificationError("*** line " + String.valueOf(fd.posn.getPosition()) + ": Identification Error: non-static fields cannot be statically initialized!");
+				} else {
+					visitExpression(fd.ix, arg + " !" + fd.name);
+				}
 			}
 			return null;
 		} catch (SyntaxError e) {
@@ -447,12 +466,37 @@ public class Identification implements Visitor<String, Object> {
 		// Reference ( ArgumentList? ) ;
 		// ArgumentList ::= Expression ( , Expression )*
 		try {
-			stmt.methodRef.decl = (Declaration) visitReference(stmt.methodRef, arg + " !callExpr");
+			Object exp = null;
 			if (stmt.argList.size() > 0) {
 				for (Expression e: stmt.argList) {
-					visitExpression(e, arg);
+					exp = visitExpression(e, arg);
 				}
 			}
+			if (exp != null) {
+				//System.out.println(exp);
+				if (exp instanceof Declaration) {
+					if (((Declaration) exp).type.typeKind.equals(TypeKind.STRING)){
+						stmt.methodRef.decl = (Declaration) visitReference(stmt.methodRef, arg + " !callExpr !String");
+					} else {
+						stmt.methodRef.decl = (Declaration) visitReference(stmt.methodRef, arg + " !callExpr");
+					}
+				} else if (exp instanceof StringLiteral) {
+					stmt.methodRef.decl = (Declaration) visitReference(stmt.methodRef, arg + " !callExpr !String");
+				} else if (exp instanceof TypeDenoter) {
+					if (((TypeDenoter) exp).typeKind.equals(TypeKind.STRING)) {
+						stmt.methodRef.decl = (Declaration) visitReference(stmt.methodRef, arg + " !callExpr !String");
+					} else {
+						stmt.methodRef.decl = (Declaration) visitReference(stmt.methodRef, arg + " !callExpr");
+					}
+				} else {
+					stmt.methodRef.decl = (Declaration) visitReference(stmt.methodRef, arg + " !callExpr");
+				}
+			} else {
+				stmt.methodRef.decl = (Declaration) visitReference(stmt.methodRef, arg + " !callExpr");
+			}
+			
+			//stmt.methodRef.decl = (Declaration) visitReference(stmt.methodRef, arg + " !callExpr" + " !" + exp.);
+			
 			return null;
 		} catch (SyntaxError e) {
 			throw e;
@@ -538,7 +582,6 @@ public class Identification implements Visitor<String, Object> {
 		// unop Expression
 		try {
 			visitExpression(expr.expr, arg);
-			
 			return null;
 		} catch (SyntaxError e) {
 			throw e;
@@ -564,9 +607,9 @@ public class Identification implements Visitor<String, Object> {
 		String[] args = arg.split("\\s+");
 		try {
 
-			visitReference(expr.ref, arg);
+			return visitReference(expr.ref, arg);
 			
-			return null;
+			//return null;
 		} catch (SyntaxError e) {
 			throw e;
 		}
@@ -576,10 +619,14 @@ public class Identification implements Visitor<String, Object> {
 	public Object visitIxExpr(IxExpr expr, String arg) throws SyntaxError {
 		// Reference [ Expression ]
 		try {
-			visitReference(expr.ref, arg);
+			Declaration ref = (Declaration) visitReference(expr.ref, arg); 
 			visitExpression(expr.ixExpr, arg);
 			
-			return null;
+			if (ref != null && ref.type.typeKind.equals(TypeKind.ARRAY)) {
+				return ((ArrayType) ref.type).eltType;
+			} else {
+				return null;
+			}
 		} catch (SyntaxError e) {
 			throw e;
 		}
@@ -589,14 +636,14 @@ public class Identification implements Visitor<String, Object> {
 	public Object visitCallExpr(CallExpr expr, String arg) throws SyntaxError{
 		// Reference ( ArgumentList? )
 		try {
-			visitReference(expr.functionRef, arg + " !callExpr");
+			
 			if (expr.argList.size() > 0) {
 				for (Expression e: expr.argList) {
 					visitExpression(e, arg);
 				}
 			}
-			
-			return null;
+			return visitReference(expr.functionRef, arg + " !callExpr");
+		//	return null;
 		} catch (SyntaxError e) {
 			throw e;
 		}
@@ -610,7 +657,7 @@ public class Identification implements Visitor<String, Object> {
 			case NULL:
 				visitNullLiteral((NullLiteral) expr.lit, arg);
 				break;
-			case BOOLEAN:
+			//case BOOLEAN:
 			case TRUE:
 			case FALSE:
 				visitBooleanLiteral((BooleanLiteral) expr.lit, arg);
@@ -618,6 +665,9 @@ public class Identification implements Visitor<String, Object> {
 			case NUM:
 				visitIntLiteral((IntLiteral) expr.lit, arg);
 				break;
+			case STRINGLIT:
+				visitStringLiteral((StringLiteral) expr.lit, arg);
+				return (StringLiteral) expr.lit;
 			default:
 				identificationError("*** line " + String.valueOf(expr.posn.getPosition()) + ": Literal expression type not recognized!");
 			}
@@ -650,11 +700,13 @@ public class Identification implements Visitor<String, Object> {
 			switch (expr.eltType.typeKind) {
 			case INT:
 				break;
+			case STRING:
+				break;
 			case CLASS:
 				visitClassType((ClassType) expr.eltType, arg);
 				break;
 			default:
-				identificationError("*** line " + String.valueOf(expr.posn.getPosition()) + ": Error! new array object can only be int or class type!!");
+				identificationError("*** line " + String.valueOf(expr.posn.getPosition()) + ": Error! New array object can only be int or class type!!");
 			}
 			
 			visitExpression(expr.sizeExpr, arg);
@@ -742,7 +794,7 @@ public class Identification implements Visitor<String, Object> {
 
 			
 			if (ref.decl == null) {
-				identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Member '" + ref.id.spelling + "' does not exist or is not accessible in specified class!");
+				identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Member '" + ref.id.spelling + "' does not exist, has not been initialized, or is not accessible in specified class!");
 			}
 			
 			
@@ -775,6 +827,7 @@ public class Identification implements Visitor<String, Object> {
 	@Override
 	public Object visitQRef(QualRef ref, String arg) {
 		// Reference.id
+		//System.out.println(ref.id.spelling);
 		
 		String[] args = arg.split("\\s+");
 		
@@ -794,7 +847,7 @@ public class Identification implements Visitor<String, Object> {
 			
 			
 			if (prevDecl instanceof ClassDecl) {
-
+				
 				if (otherMemDecs.containsKey(prevDecl.name + "." + ref.id.spelling)) {
 					ref.decl = (MemberDecl) otherMemDecs.get(prevDecl.name + "." + ref.id.spelling);
 				} else {
@@ -816,7 +869,7 @@ public class Identification implements Visitor<String, Object> {
 				}
 
 			} else if (prevDecl instanceof MemberDecl) {
-				if (! ((MemberDecl) prevDecl).type.typeKind.equals(TypeKind.CLASS) && (!((MemberDecl) prevDecl).type.typeKind.equals(TypeKind.ARRAY) || !ref.id.spelling.equals("length"))){
+				 if (! ((MemberDecl) prevDecl).type.typeKind.equals(TypeKind.CLASS) && (!((MemberDecl) prevDecl).type.typeKind.equals(TypeKind.ARRAY) || !ref.id.spelling.equals("length"))){
 					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Identification Error: Variable '" + prevDecl.name + "' is not class type!");
 					return prevDecl;
 				} else if (((MemberDecl) prevDecl).type.typeKind.equals(TypeKind.ARRAY) && ref.id.spelling.equals("length")) {
@@ -832,8 +885,14 @@ public class Identification implements Visitor<String, Object> {
 
 				}
 				ClassDecl cd = (ClassDecl) visitClassType((ClassType)((MemberDecl) prevDecl).type, arg);
-				
-				if (otherMemDecs.containsKey(cd.name + "." + ref.id.spelling)) {
+				if (ref.id.spelling.equals("println") && in(arg, "!String")) {
+					
+					ref.decl = (MemberDecl) otherMemDecs.get(cd.name + "." + ref.id.spelling + "String");
+					//System.out.println(cd.name + "." + ref.id.spelling + "String");
+					//System.out.println(((MethodDecl)ref.decl).parameterDeclList.get(0).type.typeKind.name());
+					
+					return ref.decl;
+				} else if (otherMemDecs.containsKey(cd.name + "." + ref.id.spelling)) {
 					ref.decl = (MemberDecl) otherMemDecs.get(cd.name + "." + ref.id.spelling);
 				} else {
 					boolean cc = false;
@@ -865,7 +924,6 @@ public class Identification implements Visitor<String, Object> {
 					identificationError("*** line " + String.valueOf(ref.posn.getPosition()) + ": Cannot have qualified reference for variable of type " + prevDecl.type.typeKind + "!");
 				}
 				ClassDecl cd = (ClassDecl) visitClassType((ClassType)(prevDecl).type, arg);
-				
 				if (otherMemDecs.containsKey(cd.name + "." + ref.id.spelling)) {
 					ref.decl = (MemberDecl) otherMemDecs.get(cd.name + "." + ref.id.spelling);
 				} else {
@@ -887,7 +945,7 @@ public class Identification implements Visitor<String, Object> {
 			if (ref.decl.type.typeKind.equals(TypeKind.ARRAY)) {
 				visitArrayType((ArrayType) ref.decl.type, arg);
 			}
-			
+
 			return ref.decl;
 			
 		} catch (SyntaxError e) {
@@ -938,6 +996,11 @@ public class Identification implements Visitor<String, Object> {
 
 	@Override
 	public Object visitNullLiteral(NullLiteral nulll, String arg) {
+		return null;
+	}
+
+	@Override
+	public Object visitStringLiteral(StringLiteral sl, String arg) {
 		return null;
 	}
 
