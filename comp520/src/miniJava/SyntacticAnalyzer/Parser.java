@@ -1,9 +1,13 @@
 package miniJava.SyntacticAnalyzer;
 
 import miniJava.*;
+
 import miniJava.AbstractSyntaxTrees.*;
 import miniJava.AbstractSyntaxTrees.Package;
+import miniJava.ContextualAnalysis.Identification;
 
+import java.util.HashMap;
+import java.util.Stack;
 
 public class Parser {
 
@@ -16,6 +20,7 @@ public class Parser {
 		this.scanner = scanner;
 		this.reporter = reporter;
 		this.trace = trace;
+		
 	}
 	
 	class SyntaxError extends Error {
@@ -25,6 +30,7 @@ public class Parser {
 	
 	public AST parse() {
 		token = scanner.scan();
+		token.posn = new SourcePosition(token.posn.getPosition());
 		// TO DO: is this sufficient for when there's an error?
 		AST parseTree = new ClassDecl("ERROR", new FieldDeclList(), new MethodDeclList(), token.posn);
 		try {
@@ -32,8 +38,9 @@ public class Parser {
 		} catch (SyntaxError e) {
 			return null;
 		} 
-		ASTDisplay disp = new ASTDisplay();
-		disp.showTree(parseTree);
+		//PA3 don't need to show parse tree
+		//ASTDisplay disp = new ASTDisplay();
+		//disp.showTree(parseTree);		
 		return parseTree;
 	}
 	
@@ -43,6 +50,7 @@ public class Parser {
 				pTrace();
 			}
 			token = scanner.scan();
+			token.posn = new SourcePosition(token.posn.getPosition());
 		} else {
 			parseError("expecting '" + expected.kind + "' but found '" + token.kind + "' at token " + String.valueOf(expected.posn.getPosition()));
 		}
@@ -50,7 +58,7 @@ public class Parser {
 	}
 	
 	private void parseError (String e) throws SyntaxError{
-		reporter.reportError("Parse error: " + e);
+		reporter.reportError("*** Parse error: " + e);
 		throw new SyntaxError();
 	}
 	
@@ -67,9 +75,12 @@ public class Parser {
 	//Program ::= (ClassDeclaration)* eot
 	AST parseProgram() throws SyntaxError {
 		Package program;
+		
 		ClassDeclList cdl = new ClassDeclList();
+		ClassDecl cd;
 		while (token.kind != TokenKind.EOT) {
-			cdl.add(parseClassDeclaration());
+			cd = parseClassDeclaration();
+			cdl.add(cd);
 		}
 		program = new Package(cdl, token.posn);
 		return program;
@@ -81,6 +92,7 @@ public class Parser {
 		ClassDecl cd;
 		accept(new Token(TokenKind.CLASS, "class", token.posn));
 		
+		SourcePosition cp = token.posn;
 		String className = token.spelling; //TODO more rebust method of getting class name
 		accept(new Token(TokenKind.ID, "?", token.posn));
 		
@@ -101,7 +113,7 @@ public class Parser {
 		}
 		accept(new Token(TokenKind.RCURLY, "}", token.posn));
 		
-		cd = new ClassDecl(className, fdl, mdl, token.posn);
+		cd = new ClassDecl(className, fdl, mdl, cp);
 		return cd;
 	}
 	
@@ -123,18 +135,21 @@ public class Parser {
 			accept(new Token(TokenKind.ACCESS, "static", token.posn));
 		}
 		
-		//TypeKinds are void, int, boolean, class, array, unsuported, and error 
-		if (token.kind == TokenKind.VOID) {
+		//TypeKinds are void, int, boolean, class, string, array, unsuported, and error 
+		if (token.kind.equals(TokenKind.VOID)) {
+			SourcePosition cp = token.posn;
 			accept(new Token(TokenKind.VOID, "void", token.posn));
-			td = new BaseType(TypeKind.VOID, token.posn);
+			td = new BaseType(TypeKind.VOID, cp);
 			//parseVoidMethod();
 		} else {
+			
 			td = parseType();
 		}
 		name = token.spelling;
+		SourcePosition cp = token.posn;
 		accept(new Token( TokenKind.ID, "?", token.posn));
 		
-		fd = new FieldDecl(isPrivate, isStatic, td, name, token.posn);
+		fd = new FieldDecl(isPrivate, isStatic, td, name, null, cp);
 		
 		switch(token.kind) {
 		case LPAREN:
@@ -143,11 +158,19 @@ public class Parser {
 		case SEMICOLON:
 			accept(new Token(TokenKind.SEMICOLON, ";", token.posn));
 			if (fd.type.typeKind == TypeKind.VOID) {
-				parseError("Cannot have a void type for field");
+				parseError("Cannot have a void type for field" + " at " + String.valueOf(token.posn.getPosition()));
 			}
 			return fd;
+		case EQUALS:
+			accept(new Token(TokenKind.EQUALS, "=", token.posn));
+			if (fd.type.typeKind == TypeKind.VOID) {
+				parseError("Cannot have a void type for field" + " at " + String.valueOf(token.posn.getPosition()));
+			}
+			Expression ix = parseExpression();
+			accept(new Token(TokenKind.SEMICOLON, ";", token.posn));
+			return new FieldDecl(isPrivate, isStatic, td, name, ix, cp);
 		default:
-			parseError("Invalid Term - expecting SEMICOLON or LPAREN but found " + token.kind);
+			parseError("Invalid Term - expecting SEMICOLON or LPAREN but found " + token.kind + " at " + String.valueOf(token.posn.getPosition()));
 			fd.type.typeKind = TypeKind.ERROR;
 			return fd;
 		}
@@ -165,33 +188,50 @@ public class Parser {
 	void parseTypeFieldOrMethod() throws SyntaxError{
 		
 	}*/
-	//Type ::= int | boolean | id | ( int | id ) [] 
+	//Type ::= int | boolean | id | String | ( String | int | id ) [] 
 	TypeDenoter parseType() throws SyntaxError {
+		SourcePosition cp;
 		switch(token.kind) {
 		case INT:
+			cp = token.posn;
 			accept(new Token( TokenKind.INT, "?", token.posn));
 			if (token.kind == TokenKind.LBRACK) {
 				accept(new Token( TokenKind.LBRACK, "[", token.posn));
+				cp = token.posn;
 				accept(new Token( TokenKind.RBRACK, "]", token.posn));
-				return new ArrayType(new BaseType(TypeKind.INT, token.posn), token.posn);
+				return new ArrayType(new BaseType(TypeKind.INT, cp), cp);
 			} else {
-				return new BaseType(TypeKind.INT, token.posn);
+				return new BaseType(TypeKind.INT, cp);
 			}
 		case BOOLEAN:
+			cp = token.posn;
 			accept(new Token( TokenKind.BOOLEAN, "?", token.posn));
-			return new BaseType(TypeKind.BOOLEAN, token.posn);
+			return new BaseType(TypeKind.BOOLEAN, cp);
 		case ID:
 			Identifier id = new Identifier(token);
+			cp = token.posn;
 			accept(new Token( TokenKind.ID, "?", token.posn));
 			if (token.kind == TokenKind.LBRACK) {
 				accept(new Token( TokenKind.LBRACK, "[", token.posn));
+				cp = token.posn;
 				accept(new Token( TokenKind.RBRACK, "]", token.posn));
-				return new ArrayType(new ClassType(id, token.posn), token.posn);
+				return new ArrayType(new ClassType(id, token.posn), cp);
 			} else {
-				return new ClassType(id, token.posn);
+				return new ClassType(id, cp);
+			}
+		case STRING:
+			cp = token.posn;
+			accept(new Token( TokenKind.STRING, "?", token.posn));
+			if (token.kind == TokenKind.LBRACK) {
+				accept(new Token( TokenKind.LBRACK, "[", token.posn));
+				cp = token.posn;
+				accept(new Token( TokenKind.RBRACK, "]", token.posn));
+				return new ArrayType(new BaseType(TypeKind.STRING, cp), cp);
+			} else {
+				return new BaseType(TypeKind.STRING, cp);
 			}
 		default:
-			parseError("Invalid Term - expecting INT, BOOLEAN, or ID but found " + token.kind);
+			parseError("Invalid Term - expecting INT, BOOLEAN, or ID but found " + token.kind + " at " + String.valueOf(token.posn.getPosition()));
 			return new BaseType(TypeKind.ERROR, token.posn);
 		}
 	}
@@ -214,8 +254,9 @@ public class Parser {
 		while (token.kind != TokenKind.RCURLY) {
 			sl.add(parseStatement());
 		}
+		SourcePosition cp = token.posn;
 		accept(new Token(TokenKind.RCURLY, "}", token.posn));
-		return new MethodDecl(fd, pl, sl, token.posn);
+		return new MethodDecl(fd, pl, sl, fd.posn);
 	}
 	
 	//Type id ( , Type id )*
@@ -227,16 +268,18 @@ public class Parser {
 		
 		td = parseType();
 		name = token.spelling;
+		SourcePosition cp = token.posn;
 		accept(new Token(TokenKind.ID, "?", token.posn));
 		
-		pl.add(new ParameterDecl(td, name, token.posn));
+		pl.add(new ParameterDecl(td, name, cp));
 		
 		while (token.kind == TokenKind.COMMA) {
 			accept(new Token(TokenKind.COMMA, ",", token.posn));
 			td = parseType();
 			name = token.spelling;
+			cp = token.posn;
 			accept(new Token(TokenKind.ID, "?", token.posn));
-			pl.add(new ParameterDecl(td, name, token.posn));
+			pl.add(new ParameterDecl(td, name, cp));
 		}
 		return pl;
 	}
@@ -258,6 +301,7 @@ public class Parser {
 	| while ( Expression ) Statement*/
 	Statement parseStatement() throws SyntaxError {
 		//Statement stateAST;
+		SourcePosition cp;
 		switch(token.kind) {
 		case LCURLY:
 			StatementList sl = new StatementList();
@@ -267,8 +311,9 @@ public class Parser {
 				// Statement sAST = parseStatement();
 				//declAST = new BlockStmt() ; 
 			}
+			cp = token.posn;
 			accept(new Token(TokenKind.RCURLY, "}", token.posn));
-			return new BlockStmt(sl, token.posn);
+			return new BlockStmt(sl, cp);
 		case RETURN:
 			accept(new Token(TokenKind.RETURN, "return", token.posn));
 			Expression e = null;
@@ -277,28 +322,32 @@ public class Parser {
 				//Expression eAST = parseExpression();
 			}
 			//TO DO What if no expression, just semi-colon?
+			cp = token.posn;
 			accept(new Token(TokenKind.SEMICOLON, ";", token.posn));
-			return new ReturnStmt(e, token.posn);
+			return new ReturnStmt(e, cp);
 		case IF:
 			accept(new Token(TokenKind.IF, "if", token.posn));
 			accept(new Token(TokenKind.LPAREN, "(", token.posn));
 			Expression cond = parseExpression();
 			accept(new Token(TokenKind.RPAREN, ")", token.posn));
 			Statement thenState = parseStatement();
+			cp = thenState.posn;
 			Statement elseState = null;
 			if (token.kind == TokenKind.ELSE) {
 				accept(new Token(TokenKind.ELSE, "else", token.posn));
 				elseState = parseStatement();
+				cp = elseState.posn;
 				// TO DO: what if no else statement??
 			}
-			return new IfStmt(cond, thenState, elseState, token.posn);
+			return new IfStmt(cond, thenState, elseState, cp);
 		case WHILE:
 			accept(new Token(TokenKind.WHILE, "while", token.posn));
 			accept(new Token(TokenKind.LPAREN, "(", token.posn));
 			cond = parseExpression();
 			accept(new Token(TokenKind.RPAREN, ")", token.posn));
 			Statement body = parseStatement();
-			return new WhileStmt(cond, body, token.posn);
+			cp = body.posn;
+			return new WhileStmt(cond, body, cp);
 		default:
 			return parseTypeOrReference();
 			//CallStmt
@@ -325,22 +374,27 @@ public class Parser {
 		Expression e;
 		
 		Reference ref;
+		SourcePosition cp;
 		
 		switch(token.kind) {
 		case INT:
+		case STRING:
 		case BOOLEAN: 
 			t = parseType();
 			name = token.spelling;
 			accept(new Token(TokenKind.ID, "?", token.posn));
 			accept(new Token(TokenKind.EQUALS, "=", token.posn));
 			e = parseExpression();
+			cp = token.posn;
 			accept(new Token(TokenKind.SEMICOLON, ";", token.posn));
-			return new VarDeclStmt(new VarDecl(t,name,token.posn), e, token.posn);
+			return new VarDeclStmt(new VarDecl(t,name,cp), e, cp);
 		case ID:
 			//Type id = Expression ;
 			Identifier id = new Identifier(token);
+			cp = token.posn;
 			accept(new Token(TokenKind.ID, ";", token.posn));
 			if (token.kind == TokenKind.LBRACK) {
+				cp = token.posn;
 				accept(new Token(TokenKind.LBRACK, "[", token.posn));
 				if (token.kind != TokenKind.RBRACK) {
 				// reference [expression] = expression
@@ -349,8 +403,9 @@ public class Parser {
 					accept(new Token(TokenKind.RBRACK, "]", token.posn));
 					accept(new Token(TokenKind.EQUALS, "=", token.posn));
 					Expression iae = parseExpression();
+					cp = token.posn;
 					accept(new Token(TokenKind.SEMICOLON, ";", token.posn));
-					return new IxAssignStmt(new IdRef(id, token.posn), i, iae, token.posn);
+					return new IxAssignStmt(new IdRef(id, token.posn), i, iae, cp);
 				} else {
 					// id[] id = expression;
 					t = new ArrayType(new ClassType(id, token.posn), token.posn);
@@ -359,22 +414,24 @@ public class Parser {
 					accept(new Token(TokenKind.ID, ";", token.posn));
 					accept(new Token(TokenKind.EQUALS, "=", token.posn));
 					e = parseExpression();
+					cp = token.posn;
 					accept(new Token(TokenKind.SEMICOLON, ";", token.posn));
-					return new VarDeclStmt(new VarDecl(t,name,token.posn), e, token.posn);
+					return new VarDeclStmt(new VarDecl(t,name,cp), e, cp);
 				}
 			}
 			//case id id = expression id; has to be type id = expression;
 			if (token.kind == TokenKind.ID) {
-				t = new ClassType(id, token.posn);
+				t = new ClassType(id, cp);
 				name = token.spelling;
 				accept(new Token(TokenKind.ID, "?", token.posn));
 				accept(new Token(TokenKind.EQUALS, "=", token.posn));
 				e = parseExpression();
+				cp = token.posn;
 				accept(new Token(TokenKind.SEMICOLON, ";", token.posn));
-				return new VarDeclStmt(new VarDecl(t,name,token.posn), e, token.posn);
+				return new VarDeclStmt(new VarDecl(t,name,cp), e, cp);
 			} else {
 				//deals with case id.
-				ref = new IdRef(id, token.posn);
+				ref = new IdRef(id, cp);
 				ref = parseReferencePrime(ref);
 			}
 			break;
@@ -391,23 +448,26 @@ public class Parser {
 				el = new ExprList();
 			}
 			accept(new Token(TokenKind.RPAREN, ")", token.posn));
+			cp = token.posn;
 			accept(new Token(TokenKind.SEMICOLON, ";", token.posn));
-			return new CallStmt(ref, el, token.posn);
+			return new CallStmt(ref, el, cp);
 		case LBRACK:
 			accept(new Token(TokenKind.LBRACK, "[", token.posn));
 			Expression i = parseExpression();
 			accept(new Token(TokenKind.RBRACK, "]", token.posn));
 			accept(new Token(TokenKind.EQUALS, "=", token.posn));
 			Expression iae = parseExpression();
+			cp = token.posn;
 			accept(new Token(TokenKind.SEMICOLON, ";", token.posn));
-			return new IxAssignStmt(ref, i, iae, token.posn);
+			return new IxAssignStmt(ref, i, iae, cp);
 		case EQUALS:
 			accept(new Token(TokenKind.EQUALS, "=", token.posn));
 			Expression ae = parseExpression();
+			cp = token.posn;
 			accept(new Token(TokenKind.SEMICOLON, ";", token.posn));
-			return new AssignStmt(ref, ae, token.posn);
+			return new AssignStmt(ref, ae, cp);
 		default:
-			parseError("Invalid Term - expecting LPAREN, LBRACK, or EQUALS but found " + token.kind);
+			parseError("Invalid Term - expecting LPAREN, LBRACK, or EQUALS but found " + token.kind + " at " + String.valueOf(token.posn.getPosition()));
 			return new AssignStmt(null, null, token.posn);
 			// TODO sufficient for error?
 		}
@@ -425,31 +485,36 @@ public class Parser {
 	 * Z ::= Reference
  | Reference [ Expression ]
 | Reference ( ArgumentList? )
+| Reference.length <-- added for PA4
 | unop Expression | MINUS Expression
 | Expression binop Expression
 | ( Expression )
-| num | true | false
-| new ( id () | int [ Expression ] | id [ Expression ] )
+| num | true | false | null string literal
+| new ( id () | int [ Expression ] | id [ Expression ] | String [ Expression ] )
 	 */
 	Expression parseExpression() {
+		SourcePosition cp;
 		Expression e = parseT();
 		Operator o;
 		while (token.spelling == "||") {
 			o = new Operator(token);
+			cp = token.posn;
 			accept(new Token(TokenKind.BINOP, "||", token.posn));
-			e = new BinaryExpr(o, e, parseT(), token.posn);
+			e = new BinaryExpr(o, e, parseT(), cp);
 		}
 		return e;
 	}
 	
 	//T ::= F ( && F)* 
 	Expression parseT() {
+		SourcePosition cp;
 		Expression e = parseF();
 		Operator o;
 		while (token.spelling == "&&") {
 			o = new Operator(token);
+			cp = token.posn;
 			accept(new Token(TokenKind.BINOP, "&&", token.posn));
-			e = new BinaryExpr(o, e, parseF(), token.posn);
+			e = new BinaryExpr(o, e, parseF(), cp);
 		}
 		return e;	
 	}
@@ -457,11 +522,13 @@ public class Parser {
 	//F ::= G ((==G) | (!=G))*
 	Expression parseF() {
 		Expression e = parseG();
+		SourcePosition cp;
 		Operator o;
 		while (token.spelling == "==" || token.spelling == "!=") {
 			o = new Operator(token);
+			cp = token.posn;
 			accept(new Token(TokenKind.BINOP, "?", token.posn));
-			e = new BinaryExpr(o, e, parseG(), token.posn);
+			e = new BinaryExpr(o, e, parseG(), cp);
 		}
 		return e;	
 	}
@@ -469,12 +536,14 @@ public class Parser {
 	//G ::= X ( (<=X) | (<X) | >X | >=X)*
 	Expression parseG() {
 		Expression e = parseX();
+		SourcePosition cp;
 		Operator o;
 		while (token.spelling == "<=" || token.spelling == "<" 
 				||token.spelling == ">=" || token.spelling == ">" ) {
 			o = new Operator(token);
+			cp = token.posn;
 			accept(new Token(TokenKind.BINOP, "?", token.posn));
-			e = new BinaryExpr(o, e, parseX(), token.posn);
+			e = new BinaryExpr(o, e, parseX(), cp);
 		}
 		return e;	
 	}
@@ -482,15 +551,17 @@ public class Parser {
 	//X ::= Y ( + Y | - Y)*
 	Expression parseX() {
 		Expression e = parseY();
+		SourcePosition cp;
 		Operator o;
 		while (token.spelling == "+" || token.spelling == "-" ) {
 			o = new Operator(token);
+			cp = token.posn;
 			if (token.spelling == "-") {
 				accept(new Token(TokenKind.MINUS, "-", token.posn));
 			} else {
 				accept(new Token(TokenKind.BINOP, "+", token.posn));
 			}
-			e = new BinaryExpr(o, e, parseY(), token.posn);
+			e = new BinaryExpr(o, e, parseY(), cp);
 		}
 		return e;
 	}
@@ -498,41 +569,51 @@ public class Parser {
 	//Y ::= Z (*Z | /Z)*
 	Expression parseY() {
 		Expression e = parseZ();
+		SourcePosition cp;
 		Operator o;
 		while (token.spelling == "*" || token.spelling == "/") {
 			o = new Operator(token);
+			cp = token.posn;
 			accept(new Token(TokenKind.BINOP, "?", token.posn));
-			e = new BinaryExpr(o, e, parseZ(), token.posn);
+			e = new BinaryExpr(o, e, parseZ(), cp);
 		}
 		return e;	
 	}
 	
 	/*Z ::= Reference
 			 | Reference [ Expression ]
+			 | Reference.length <-- added for PA4
 					 | Reference ( ArgumentList? )
 					 | unop Expression | MINUS Expression
 					 | ( Expression )
-					 | num | true | false
+					 | num | true | false | null | string
 					 | new ( id () | int [ Expression ] | id [ Expression ] )
 					 	 */
 	Expression parseZ() throws SyntaxError {
 		Expression exp;
 		Operator op;
+		SourcePosition cp;
 		Expression subExp;
 		switch(token.kind) {
+		case NULL:
+			exp = new LiteralExpr(new NullLiteral(token), token.posn);
+			accept(new Token(TokenKind.NULL, "null", token.posn));
+			return exp;
 		case MINUS:
 			// TO DO: check that token.minus is valid for operator
 			op = new Operator(token);
+			cp = token.posn;
 			accept(new Token(TokenKind.MINUS, "-", token.posn));
 			// while ***collect all the negatives and then return that
 			subExp = parseZ();
-			return new UnaryExpr(op, subExp, token.posn);
+			return new UnaryExpr(op, subExp, cp);
 		case UNOP:
 			op = new Operator(token);
+			cp = token.posn;
 			accept(new Token(TokenKind.UNOP, "?", token.posn));
 			subExp = parseZ();
 			// the issue is that the sub exp might include other operations, so what we want to do is collect only other parseZ's??
-			return new UnaryExpr(op, subExp, token.posn); 
+			return new UnaryExpr(op, subExp, cp); 
 		case LPAREN:
 			// TO DO: is this correct???
 			accept(new Token(TokenKind.LPAREN, "(", token.posn));
@@ -542,6 +623,10 @@ public class Parser {
 		case NUM:
 			exp = new LiteralExpr(new IntLiteral(token), token.posn);
 			accept(new Token(TokenKind.NUM, "?", token.posn));
+			return exp;
+		case STRINGLIT:
+			exp = new LiteralExpr(new StringLiteral(token), token.posn);
+			accept(new Token(TokenKind.STRINGLIT, "?", token.posn));
 			return exp;
 		case TRUE:
 			exp = new LiteralExpr(new BooleanLiteral(token), token.posn);
@@ -556,29 +641,40 @@ public class Parser {
 			switch(token.kind) {
 			case ID:
 				Identifier id = new Identifier(token);
+				cp = token.posn;
 				accept(new Token(TokenKind.ID, "?", token.posn));
 				switch(token.kind) {
 				case LPAREN:
 					accept(new Token(TokenKind.LPAREN, "(", token.posn));
+					cp = token.posn;
 					accept(new Token(TokenKind.RPAREN, ")", token.posn));
-					return new NewObjectExpr(new ClassType(id, token.posn), token.posn);
+					return new NewObjectExpr(new ClassType(id, cp), cp);
 				case LBRACK:
 					accept(new Token(TokenKind.LBRACK, "[", token.posn));
 					subExp = parseExpression();
+					cp = token.posn;
 					accept(new Token(TokenKind.RBRACK, "]", token.posn));
-					return new NewArrayExpr(new ClassType(id, token.posn), subExp, token.posn);
+					return new NewArrayExpr(new ClassType(id, cp), subExp, cp);
 				default:
-					parseError("Invalid Term - expecting LPAREN or LBRACK but found " + token.kind);
+					parseError("Invalid Term - expecting LPAREN or LBRACK but found " + token.kind + " at " + String.valueOf(token.posn.getPosition()));
 					return new RefExpr(null, token.posn);
 				}
 			case INT:
 				accept(new Token(TokenKind.INT, "int", token.posn));
 				accept(new Token(TokenKind.LBRACK, "[", token.posn));
 				subExp = parseExpression();
+				cp = token.posn;
 				accept(new Token(TokenKind.RBRACK, "]", token.posn));
-				return new NewArrayExpr(new BaseType(TypeKind.INT, token.posn), subExp, token.posn);
+				return new NewArrayExpr(new BaseType(TypeKind.INT, cp), subExp, cp);
+			case STRING:
+				accept(new Token(TokenKind.STRING, "String", token.posn));
+				accept(new Token(TokenKind.LBRACK, "[", token.posn));
+				subExp = parseExpression();
+				cp = token.posn;
+				accept(new Token(TokenKind.RBRACK, "]", token.posn));
+				return new NewArrayExpr(new BaseType(TypeKind.STRING, cp), subExp, cp);
 			default:
-				parseError("Invalid Term - expecting INT or ID but found " + token.kind);
+				parseError("Invalid Term - expecting INT or ID but found " + token.kind + " at " + String.valueOf(token.posn.getPosition()));
 				return new RefExpr(null, token.posn);
 			}
 		case ID:
@@ -587,8 +683,9 @@ public class Parser {
 			if (token.kind == TokenKind.LBRACK) {
 				accept(new Token(TokenKind.LBRACK, "[", token.posn));
 				subExp = parseExpression();
+				cp = token.posn;
 				accept(new Token(TokenKind.RBRACK, "]", token.posn));
-				return new IxExpr(r, subExp, token.posn);
+				return new IxExpr(r, subExp, cp);
 			} else if (token.kind == TokenKind.LPAREN) {
 				accept(new Token(TokenKind.LPAREN, "(", token.posn));
 				ExprList el;
@@ -597,13 +694,20 @@ public class Parser {
 				} else {
 					el = new ExprList();
 				}
+				cp = token.posn;
 				accept(new Token(TokenKind.RPAREN, ")", token.posn));
-				return new CallExpr(r, el, token.posn);
-			} else {
-				return new RefExpr(r, token.posn);
+				return new CallExpr(r, el, cp);
+			} /*else if (token.kind == TokenKind.LENGTH) {
+				// the reference parse will accept the reference bits up until length
+				// added for PA4
+				cp = token.posn;
+				accept(new Token(TokenKind.LENGTH, "length", token.posn));
+				return new ArrayLengthExpr(r, cp);
+			} */ else {
+				return new RefExpr(r, r.posn);
 			}
 		default:
-			parseError("Invalid Term - not expecting " + token.kind);
+			parseError("Invalid Term - not expecting " + token.kind + " at " + String.valueOf(token.posn.getPosition()));
 			return new RefExpr(null, token.posn);
 			//TODO sufficient for error?
 		}
@@ -625,7 +729,7 @@ public class Parser {
 			accept(new Token(TokenKind.THIS, "this", token.posn));
 			break;
 		default:
-			parseError("Invalid Term - expecting ID or THIS but found " + token.kind);
+			parseError("Invalid Term - expecting ID or THIS but found " + token.kind + " at " + String.valueOf(token.posn.getPosition()));
 			return new IdRef(null, token.posn);
 		}
 		return parseReferencePrime(r);
@@ -635,9 +739,14 @@ public class Parser {
 	Reference parseReferencePrime(Reference r) throws SyntaxError {
 		if (token.kind == TokenKind.PERIOD) {
 			accept(new Token(TokenKind.PERIOD, ".", token.posn));
+			// added for pa4
+			/*if (token.kind == TokenKind.LENGTH) {
+				return r;
+			}*/
 			Identifier id = new Identifier(token);
+			SourcePosition cp = token.posn;
 			accept(new Token(TokenKind.ID, "?", token.posn));
-			return parseReferencePrime(new QualRef(r, id, token.posn));
+			return parseReferencePrime(new QualRef(r, id, cp));
 		} else {
 			return r;
 		}

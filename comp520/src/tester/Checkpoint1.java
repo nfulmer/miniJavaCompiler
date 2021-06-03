@@ -37,7 +37,7 @@ public class Checkpoint1 {
 		
 		System.out.println(projDir);
 		// test directory present ?
-		File testDir = new File(projDir + "/../tests/pa1_tests");
+		File testDir = new File(projDir + "/tests/pa1_tests");
 		if (! testDir.isDirectory()) {
 			System.out.println("pa1_tests directory not found - exiting!");
 			return;

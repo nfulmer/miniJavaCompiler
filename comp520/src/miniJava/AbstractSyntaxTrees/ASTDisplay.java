@@ -299,6 +299,13 @@ public class ASTDisplay implements Visitor<String,Object> {
         expr.lit.visit(this, indent(arg));
         return null;
     }
+    
+    // added
+    public Object visitNullExpr(LiteralExpr expr, String arg){
+        show(arg, expr);
+        expr.lit.visit(this, indent(arg));
+        return null;
+    }
  
     public Object visitNewArrayExpr(NewArrayExpr expr, String arg){
         show(arg, expr);
@@ -364,4 +371,24 @@ public class ASTDisplay implements Visitor<String,Object> {
         show(arg, quote(bool.spelling) + " " + bool.toString());
         return null;
     }
+
+	// added TODO
+	public Object visitNullLiteral(NullLiteral nulll, String arg) {
+        show(arg, "null " + nulll.toString());
+
+		return null;
+	}
+
+	@Override
+	public Object visitStringLiteral(StringLiteral sl, String arg) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	/*
+	@Override
+	public Object visitArrayLengthExpr(ArrayLengthExpr al, String arg) {
+		// TODO Auto-generated method stub
+		return null;
+	}*/
 }

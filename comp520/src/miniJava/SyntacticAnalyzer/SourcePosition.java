@@ -4,9 +4,9 @@ public class SourcePosition {
 	
 	int position;
 
-	public SourcePosition() {
+	public SourcePosition(int position) {
 		// TODO Auto-generated constructor stub
-		position = 0;
+		this.position = position;
 	}
 	
 	public int getPosition() {
@@ -14,6 +14,9 @@ public class SourcePosition {
 	}
 	
 	public void advancePosition() {
-		position = position + 1;
+		position++;
+	}
+	public void advancePosition(int i) {
+		position += i;
 	}
 }
